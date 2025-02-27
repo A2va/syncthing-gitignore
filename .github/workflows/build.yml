@@ -13,10 +13,8 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Get tag name
+    - uses: olegtarasov/get-tag@v2.1.4
       id: tagName
-      run: echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-      if: github.event_name == 'release'
 
     - name: Setup Cosmocc
       uses: bjia56/setup-cosmocc@main
@@ -47,7 +45,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: synctignore.cosmocc.x86_64
-        path: synctignore.zip
+        path: installfolder # Upload artifact already create a zip file
 
     - name: Upload to release
       if: github.event_name == 'release'
