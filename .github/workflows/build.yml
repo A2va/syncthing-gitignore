@@ -1,0 +1,61 @@
+name: Build
+
+on:
+  push:
+  pull_request:
+  release:
+    types: [published]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Get tag name
+      id: tagName
+      run: echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+      if: github.event_name == 'release'
+
+    - name: Setup Cosmocc
+      uses: bjia56/setup-cosmocc@main
+      with:
+        version: "4.0.2"
+
+    - name: Setup xmake
+      uses: xmake-io/github-action-setup-xmake@v1
+      with:
+        xmake-version: branch@dev
+
+    - name: Build project
+      run: |
+        xmake f -p linux --toolchain=cosmocc
+        xmake
+
+    - name: Tests
+      run: |
+       xmake b tests
+       xmake run tests
+
+    - name: Create release bundle
+      run: |
+        xmake install -o installfolder
+        cd installfolder && zip -r ../synctignore.zip .
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: synctignore.cosmocc.x86_64
+        path: synctignore.zip
+
+    - name: Upload to release
+      if: github.event_name == 'release'
+      uses: actions/upload-release-asset@v1.0.1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: synctignore.zip
+        asset_name: synctignore-${{ steps.tagName.outputs.tag }}.zip
+        asset_content_type: application/zip
