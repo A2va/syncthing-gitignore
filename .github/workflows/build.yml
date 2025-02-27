@@ -30,7 +30,7 @@ jobs:
 
     - name: Build project
       run: |
-        xmake f -p linux --toolchain=cosmocc
+        xmake f -p linux --toolchain=cosmocc -y
         xmake
 
     - name: Tests
