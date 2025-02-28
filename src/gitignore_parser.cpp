@@ -179,6 +179,7 @@ bool IgnoreRule::match(const fs::path& abs_path) const {
                 // throw std::runtime_error("Given path is not in the subpath of the base path");
             }
             rel_path = std::filesystem::relative(normalize_path(abs_path), base_path.value());
+            std::cout << "Relative path: " << rel_path << std::endl;
         }
 
         std::string rel_str = rel_path.string();
