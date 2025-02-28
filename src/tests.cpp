@@ -56,6 +56,21 @@ TEST_CASE("simple") {
    CHECK(matcher.is_ignored("/home/a2va/__pycache__"));
 }
 
+TEST_CASE("simple unicode") {
+    TemporaryDirectory temp_dir;
+    fs::path gitignore_path = temp_dir.get_path() / ".gitignore";
+    {
+        std::ofstream file(gitignore_path);
+        file << "__pycache__/\n";
+        file << "*.py[cod]";
+    }
+    GitIgnoreMatcher matcher(gitignore_path, "/home/a2va");
+ 
+    CHECK_FALSE(matcher.is_ignored("/home/a2va/主要.py"));
+    CHECK(matcher.is_ignored("/home/a2va/主要.pyc"));
+    CHECK(matcher.is_ignored("/home/a2va/dir/主要.pyc"));
+}
+
 TEST_CASE("incomplete filename") {
     TemporaryDirectory temp_dir;
     fs::path gitignore_path = temp_dir.get_path() / ".gitignore";
@@ -357,5 +372,36 @@ TEST_SUITE("windows style path") {
         CHECK(matcher.is_ignored("D:\\home\\a2va\\main.pyc"));
         CHECK(matcher.is_ignored("D:\\home\\a2va\\dir\\main.pyc"));
         CHECK(matcher.is_ignored("D:\\home\\a2va\\__pycache__"));
+    }
+
+    TEST_CASE("simple unicode") {
+        TemporaryDirectory temp_dir;
+        fs::path gitignore_path = temp_dir.get_path() / ".gitignore";
+        {
+            std::ofstream file(gitignore_path);
+            file << "__pycache__/\n";
+            file << "*.py[cod]";
+        }
+        GitIgnoreMatcher matcher(gitignore_path, "D:/home/安托万");
+
+        CHECK_FALSE(matcher.is_ignored("D:/home/安托万/main.py"));
+        CHECK(matcher.is_ignored("D:/home/安托万/main.pyc"));
+        CHECK(matcher.is_ignored("D:/home/安托万/dir/main.pyc"));
+        CHECK(matcher.is_ignored("D:/home/安托万/__pycache__"));
+    }
+
+    TEST_CASE("simple unicode 2") {
+        TemporaryDirectory temp_dir;
+        fs::path gitignore_path = temp_dir.get_path() / ".gitignore";
+        {
+            std::ofstream file(gitignore_path);
+            file << "__pycache__/\n";
+            file << "*.py[cod]";
+        }
+        GitIgnoreMatcher matcher(gitignore_path, "D:/home/a2va");
+
+        CHECK_FALSE(matcher.is_ignored("D:\\home\\a2va\\主要的.py"));
+        CHECK(matcher.is_ignored("D:\\home\\a2va\\主要的.pyc"));
+        CHECK(matcher.is_ignored("D:\\home\\a2va\\dir\\主要的.pyc"));
     }
 }

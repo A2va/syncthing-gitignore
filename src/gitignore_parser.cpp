@@ -31,7 +31,7 @@
 
 namespace fs = std::filesystem;
 
-std::string to_unix_path(const std::filesystem::path& path) {
+fs::path to_unix_path(const std::filesystem::path& path) {
     std::string native_path = path.string();
 
     // Handle Windows drive letters
