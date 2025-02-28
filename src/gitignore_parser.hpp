@@ -47,6 +47,7 @@ public:
               [](const auto& r) { return r.negation; })) {}
 
     bool is_ignored(const std::filesystem::path& path) {
+        std::cout << "is_ignored: " << path << std::endl;
         if (has_negations) {
             for (auto it = rules.rbegin(); it != rules.rend(); ++it) {
                 if (it->match(path)) return !it->negation;

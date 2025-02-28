@@ -170,8 +170,11 @@ std::string fnmatch_pathname_to_regex(
 
 bool IgnoreRule::match(const fs::path& abs_path) const {
     try {
+        std::cout << " match 1: " << std::endl;
         fs::path rel_path = normalize_path(abs_path);
+        std::cout << " match 2: " << std::endl;
         if(base_path) {
+            std::cout << " match 3: " << std::endl;
             fs::path directory = rel_path.parent_path();
             fs::path base_p = base_path.value();
             if (std::mismatch(base_p.begin(), base_p.end(), directory.begin()).first != base_p.end()) {
@@ -192,6 +195,7 @@ bool IgnoreRule::match(const fs::path& abs_path) const {
 
         return std::regex_search(rel_str, regex);
     } catch (const std::filesystem::filesystem_error&) {
+        std::cout << " match exception: " << path << std::endl;
         return false;
     }
 }
@@ -266,6 +270,7 @@ std::optional<IgnoreRule> rule_from_pattern(const std::string& orig_pattern, con
 
 // Parses a .gitignore file into rules
 std::vector<IgnoreRule> parse_gitignore(const fs::path& path, std::optional<fs::path> base_dir = std::nullopt) {
+    std::cout << "gitignore path: " << path << std::endl;
     if (!base_dir) {
         base_dir = std::optional(path.parent_path());
     }
@@ -285,6 +290,7 @@ std::vector<IgnoreRule> parse_gitignore(const fs::path& path, std::optional<fs::
     int line_num = 0;
 
     while (std::getline(file, line)) {
+        std::cout << "gitignore line: " << line << std::endl;
         line_num++;
         remove_trailing_characters(line, '\n');
 
