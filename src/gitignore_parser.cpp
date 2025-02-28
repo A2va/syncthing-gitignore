@@ -25,6 +25,7 @@
 #include <cstdint>
 #include <fstream>
 #include <stdexcept>
+#include <iostream>
 
 #include "gitignore_parser.hpp"
 #include <iostream>
@@ -50,6 +51,7 @@ fs::path normalize_path(const fs::path& path) {
         normalized = normalized.parent_path() / filename;
     }
 
+    std::cout << "Normalized path: " << normalized << std::endl;
     return normalized;
 }
 
