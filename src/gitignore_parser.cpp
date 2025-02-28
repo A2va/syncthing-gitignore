@@ -195,7 +195,7 @@ bool IgnoreRule::match(const fs::path& abs_path) const {
 
         return std::regex_search(rel_str, regex);
     } catch (const std::filesystem::filesystem_error&) {
-        std::cout << " match exception: " << path << std::endl;
+        std::cout << " match exception: " << abs_path << std::endl;
         return false;
     }
 }
