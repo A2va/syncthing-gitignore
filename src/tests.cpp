@@ -54,7 +54,23 @@ TEST_CASE("simple win") {
     CHECK(matcher.is_ignored("D:\\home\\a2va\\main.pyc"));
     CHECK(matcher.is_ignored("D:\\home\\a2va\\dir\\main.pyc"));
     CHECK(matcher.is_ignored("D:\\home\\a2va\\__pycache__"));
- }
+}
+
+TEST_CASE("simple win 2") {
+    TemporaryDirectory temp_dir;
+    fs::path gitignore_path = temp_dir.get_path() / ".gitignore";
+    {
+        std::ofstream file(gitignore_path);
+        file << "__pycache__/\n";
+        file << "*.py[cod]";
+    }
+    GitIgnoreMatcher matcher(gitignore_path, "D:/home/a2va");
+ 
+    CHECK_FALSE(matcher.is_ignored("D:/home/a2va/main.py"));
+    CHECK(matcher.is_ignored("D:/home/a2va/main.pyc"));
+    CHECK(matcher.is_ignored("D:/home/a2va/dir/main.pyc"));
+    CHECK(matcher.is_ignored("D:/home/a2va/__pycache__"));
+}
 
 TEST_CASE("simple") {
    TemporaryDirectory temp_dir;
