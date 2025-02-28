@@ -324,3 +324,38 @@ TEST_CASE("slash in range does not match dirs") {
     CHECK_FALSE(matcher.is_ignored("/home/a2va/abc/def"));
     CHECK_FALSE(matcher.is_ignored("/home/a2va/abcXYZdef"));
 }
+
+TEST_SUITE("windows style path") {
+
+    TEST_CASE("simple") {
+        TemporaryDirectory temp_dir;
+        fs::path gitignore_path = temp_dir.get_path() / ".gitignore";
+        {
+            std::ofstream file(gitignore_path);
+            file << "__pycache__/\n";
+            file << "*.py[cod]";
+        }
+        GitIgnoreMatcher matcher(gitignore_path, "D:/home/a2va");
+
+        CHECK_FALSE(matcher.is_ignored("D:/home/a2va/main.py"));
+        CHECK(matcher.is_ignored("D:/home/a2va/main.pyc"));
+        CHECK(matcher.is_ignored("D:/home/a2va/dir/main.pyc"));
+        CHECK(matcher.is_ignored("D:/home/a2va/__pycache__"));
+    }
+
+    TEST_CASE("simple 2") {
+        TemporaryDirectory temp_dir;
+        fs::path gitignore_path = temp_dir.get_path() / ".gitignore";
+        {
+            std::ofstream file(gitignore_path);
+            file << "__pycache__/\n";
+            file << "*.py[cod]";
+        }
+        GitIgnoreMatcher matcher(gitignore_path, "D:/home/a2va");
+ 
+        CHECK_FALSE(matcher.is_ignored("D:\\home\\a2va\\main.py"));
+        CHECK(matcher.is_ignored("D:\\home\\a2va\\main.pyc"));
+        CHECK(matcher.is_ignored("D:\\home\\a2va\\dir\\main.pyc"));
+        CHECK(matcher.is_ignored("D:\\home\\a2va\\__pycache__"));
+    }
+}
