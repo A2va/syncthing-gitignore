@@ -10,6 +10,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    if: runner.arch == 'X64'
 
     steps:
     - uses: actions/checkout@v4
@@ -29,7 +30,7 @@ jobs:
 
     - name: Build project
       run: |
-        xmake f -p linux --toolchain=cosmocc -y
+        xmake f -p linux --toolchain=cosmocc -y -cvD
         xmake
 
     - name: Tests
