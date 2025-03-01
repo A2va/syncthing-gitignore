@@ -9,8 +9,11 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-    if: runner.arch == 'X64'
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        arch: [x86_64]
+    runs-on: ${{ matrix.os }}
 
     steps:
     - uses: actions/checkout@v4
