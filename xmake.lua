@@ -17,6 +17,7 @@ target("synctignore")
     add_defines("UNICODE", "_UNICODE")
 
 target("tests")
+    set_default(false)
     add_files("src/tests.cpp")
     add_deps("gitignore_parser")
     add_packages("doctest")
