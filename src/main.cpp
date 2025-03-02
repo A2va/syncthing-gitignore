@@ -14,8 +14,10 @@ namespace fs = std::filesystem;
 #if defined(TB_CONFIG_OS_WINDOWS)
     #include <windows.h>
 #elif defined(__COSMOPOLITAN__)
+extern "C" {
     #include <windowsesque.h>
     #include <sys/utsname.h>
+}
 #endif
 
 // proc/self
