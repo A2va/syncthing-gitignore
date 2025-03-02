@@ -18,7 +18,7 @@ target("gitignore_parser")
     add_headerfiles("src/gitignore_parser.hpp")
 
 target("synctignore")
-    add_files("src/main.cpp")
+    add_files("src/main.c")
     add_packages("tbox")
 
     -- used for win32 api (also compospolitan)
