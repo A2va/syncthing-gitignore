@@ -1,7 +1,15 @@
 add_rules("mode.debug", "mode.release")
 set_languages("cxx17")
 
-add_requires("tbox")
+package("tbox-patched")
+    set_base("tbox")
+    on_test(function (package) 
+    end)
+package_end()
+
+add_requires("tbox-patched", {system = false, alias = "tbox"})
+-- add_requires("tbox")
+
 add_requires("doctest")
 
 target("gitignore_parser")
