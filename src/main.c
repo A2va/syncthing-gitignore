@@ -26,7 +26,7 @@
 #   endif
 #endif
 
-std::string get_sys_name()
+tb_char_t const* get_sys_name()
 {
     tb_char_t const* name = tb_null;
 #if defined(__COSMOPOLITAN__)
