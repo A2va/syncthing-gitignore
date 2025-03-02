@@ -16,8 +16,8 @@ namespace fs = std::filesystem;
 #elif defined(__COSMOPOLITAN__)
 extern "C" {
     #include <windowsesque.h>
-    #include <sys/utsname.h>
 }
+#include <sys/utsname.h>
 #endif
 
 // proc/self
