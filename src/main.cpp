@@ -10,7 +10,6 @@ namespace fs = std::filesystem;
     #include <unistd.h>
 #endif
 
-
 #if defined(TB_CONFIG_OS_WINDOWS)
     #include <windows.h>
 #elif defined(__COSMOPOLITAN__)
@@ -18,6 +17,7 @@ extern "C" {
     #include <windowsesque.h>
 }
 #include <sys/utsname.h>
+#define GetModuleFileNameW GetModuleFileName
 #endif
 
 // proc/self
