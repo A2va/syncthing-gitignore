@@ -19,7 +19,7 @@ target("gitignore_parser")
     add_headerfiles("src/gitignore_parser.hpp")
 
 target("synctignore")
-    add_files("src/main.c")
+    add_files("src/main.cpp")
     -- add_packages("tbox")
     add_deps("tbox")
 
