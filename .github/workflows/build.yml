@@ -40,7 +40,7 @@ jobs:
         xmake -vD
     
     - name: Cat tbox config
-      run: cat tbox/src/tbox/config.h
+      run: cat tbox/src/tbox/tbox.config.h
 
     - name: Tests
       run: |
