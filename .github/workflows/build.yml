@@ -34,9 +34,13 @@ jobs:
         xmake-version: branch@dev
 
     - name: Build project
+      continue-on-error: true
       run: |
         xmake f -p linux --toolchain=cosmocc -y -cvD
         xmake -vD
+    
+    - name: Cat tbox config
+      run: cat tbox/src/tbox/config.h
 
     - name: Tests
       run: |
