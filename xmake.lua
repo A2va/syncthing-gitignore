@@ -21,10 +21,17 @@ target("gitignore_parser")
     add_files("src/gitignore_parser.cpp")
     add_headerfiles("src/gitignore_parser.hpp")
 
+
+target("utils")
+    set_kind("static")
+    add_files("src/utils.c")
+    add_headerfiles("src/utils.h")
+    add_deps("tbox")
+
 target("synctignore")
     add_files("src/main.cpp")
     -- add_packages("tbox")
-    add_deps("tbox")
+    add_deps("tbox", "utils")
 
     -- used for win32 api (also compospolitan)
     add_defines("UNICODE", "_UNICODE")
