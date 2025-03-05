@@ -65,8 +65,13 @@ std::string get_program_file() {
     if(sysname == "windows") {
 #if defined(TB_CONFIG_OS_WINDOWS) || defined(__COSMOPOLITAN__)
         // get the executale file path as program directory
+        std::cout << sizeof(tb_wchar_t) << std::endl;
         tb_wchar_t buf[TB_PATH_MAXN] = {0};
-        tb_size_t size = (tb_size_t)GetModuleFileNameW(tb_null, buf, (DWORD)TB_PATH_MAXN);
+    #ifdef __COSMOPOLITAN__
+        tb_size_t size = (tb_size_t)GetModuleFileNameW(tb_null, reinterpret_cast<char16_t*>(buf), (DWORD)TB_PATH_MAXN);
+    #else
+        tb_size_t size = (tb_size_t)GetModuleFileNameW(tb_null, buf, TB_PATH_MAXN);
+    #endif
         // tb_assert_and_check_break(size < TB_PATH_MAXN);
         // end
         buf[size] = L'\0';
