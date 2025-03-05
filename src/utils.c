@@ -8,11 +8,9 @@
 #if defined(TB_CONFIG_OS_WINDOWS)
     #include <windows.h>
 #elif defined(__COSMOPOLITAN__)
-extern "C" {
     #include <windowsesque.h>
-}
-#include <sys/utsname.h>
-#define GetModuleFileNameW GetModuleFileName
+    #include <sys/utsname.h>
+    #define GetModuleFileNameW GetModuleFileName
 #endif
 
 // proc/self
@@ -60,10 +58,10 @@ tb_char_t const* get_program_file() {
     if(sysname == "windows") {
 #if defined(TB_CONFIG_OS_WINDOWS) || defined(__COSMOPOLITAN__)
         // get the executale file path as program directory
-        printf("%d\N", sizeof(tb_wchar_t));
+        printf("%d\n", sizeof(tb_wchar_t));
         tb_wchar_t buf[TB_PATH_MAXN] = {0};
     #ifdef __COSMOPOLITAN__
-        tb_size_t size = (tb_size_t)GetModuleFileNameW(tb_null, reinterpret_cast<char16_t*>(buf), (DWORD)TB_PATH_MAXN);
+        tb_size_t size = (tb_size_t)GetModuleFileNameW(tb_null, (char16_t*)buf, (DWORD)TB_PATH_MAXN);
     #else
         tb_size_t size = (tb_size_t)GetModuleFileNameW(tb_null, buf, TB_PATH_MAXN);
     #endif
