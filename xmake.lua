@@ -12,7 +12,11 @@ set_languages("cxx17")
 if get_config("toolchain") == "cosmocc" then
     set_config("wchar", "true")
 end
+set_config("demo", "false")
+
 includes("tbox")
+set_project("syncthing-gitignore")
+
 
 add_requires("doctest")
 

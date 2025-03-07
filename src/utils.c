@@ -24,41 +24,37 @@
 #   endif
 #endif
 
-tb_char_t const* get_sys_name()
-{
-    tb_char_t const* name = tb_null;
+void _get_sys_name(tb_char_t* name) {
 #if defined(__COSMOPOLITAN__)
     struct utsname buffer;
-    if (uname(&buffer) == 0)
-    {
+    if (uname(&buffer) == 0) {
         if (tb_strstr(buffer.sysname, "Darwin"))
-            name = "macosx";
+            tb_strcpy(name, "macosx");
         else if (tb_strstr(buffer.sysname, "Linux"))
-            name = "linux";
+            tb_strcpy(name, "linux");
         else if (tb_strstr(buffer.sysname, "Windows"))
-            name = "windows";
+            tb_strcpy(name, "windows");
     }
 #elif defined(TB_CONFIG_OS_WINDOWS)
-    name = "windows";
+    tb_strcpy(name, "windows");
 #elif defined(TB_CONFIG_OS_MACOSX)
-    name = "macosx";
+    tb_strcpy(name, "macosx");
 #elif defined(TB_CONFIG_OS_LINUX)
-    name = "linux";
+    tb_strcpy(name, "linux");
 #endif
-    return name;
 }
 
-tb_char_t const* get_program_file() {
+void _get_program_file(tb_char_t* path) {
 
-    tb_char_t const* sysname = get_sys_name();
-    tb_char_t path[TB_PATH_MAXN] = {0};
+    tb_char_t sysname[16]; 
+    _get_sys_name(sysname);
     tb_size_t maxn = TB_PATH_MAXN;
     tb_bool_t ok = tb_false;
 
-    if(sysname == "windows") {
+    if(tb_strstr(sysname, "windows")) {
 #if defined(TB_CONFIG_OS_WINDOWS) || defined(__COSMOPOLITAN__)
         // get the executale file path as program directory
-        printf("%d\n", sizeof(tb_wchar_t));
+        printf("%lld\n", sizeof(tb_wchar_t));
         tb_wchar_t buf[TB_PATH_MAXN] = {0};
     #ifdef __COSMOPOLITAN__
         tb_size_t size = (tb_size_t)GetModuleFileNameW((int64_t)tb_null, (char16_t*)buf, (DWORD)TB_PATH_MAXN);
@@ -71,10 +67,9 @@ tb_char_t const* get_program_file() {
         size = tb_wcstombs(path, buf, maxn);
         // tb_assert_and_check_break(size < maxn);
         path[size] = '\0';
-        return path;
 #endif
     }
-    else if(sysname == "linux") {
+    else if(tb_strstr(sysname, "linux")) {
 #if defined(TB_CONFIG_OS_LINUX)
         // get the executale file path as program directory
         ssize_t size = readlink(XM_PROC_SELF_FILE, path, (size_t)maxn);
@@ -84,7 +79,7 @@ tb_char_t const* get_program_file() {
             ok = tb_true;
         }
 #endif
-    } else if(sysname == "macosx") {
+    } else if(tb_strstr(sysname, "macosx")) {
 #if defined(TB_CONFIG_OS_MACOSX)
         /*
          * _NSGetExecutablePath() copies the path of the main executable into the buffer. The bufsize parameter
@@ -101,5 +96,4 @@ tb_char_t const* get_program_file() {
             ok = tb_true;
 #endif
     }
-    return path;
 }

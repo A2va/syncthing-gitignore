@@ -6,8 +6,8 @@
     extern "C" {
 #endif
 
-tb_char_t const* get_program_file();
-tb_char_t const* get_sys_name();
+void _get_program_file(tb_char_t* path);
+void _get_sys_name(tb_char_t* path);
 
 #ifdef __cplusplus
     }
