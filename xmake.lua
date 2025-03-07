@@ -10,7 +10,7 @@ set_languages("cxx17")
 -- add_requires("tbox-patched", {system = false, alias = "tbox"})
 -- add_requires("tbox")
 if get_config("toolchain") == "cosmocc" then
-    set_config("wchar", "true")
+    set_config("wchar", "false")
 end
 set_config("demo", "false")
 
