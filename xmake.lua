@@ -13,6 +13,7 @@ if get_config("toolchain") == "cosmocc" then
     set_config("wchar", "false")
 end
 set_config("demo", "false")
+set_config("charset", "true")
 
 includes("tbox")
 set_project("syncthing-gitignore")
