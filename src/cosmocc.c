@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <uchar.h>
-#include "utils.h"
+#include "cosmocc.h"
 
 #ifndef TB_CONFIG_OS_WINDOWS
     #include <unistd.h>
@@ -11,6 +11,7 @@
 #elif defined(__COSMOPOLITAN__)
     #include <windowsesque.h>
     #include <sys/utsname.h>
+    #include <libc/proc/ntspawn.h>
     #define GetModuleFileNameW GetModuleFileName
 #endif
 
@@ -24,6 +25,44 @@
 #       define XM_PROC_SELF_FILE    "/proc/curproc/file"
 #   endif
 #endif
+
+#ifndef __COSMOPOLITAN__
+static inline int IsAlpha(int c) {
+    return ('A' <= c && c <= 'Z') || ('a' <= c && c <= 'z');
+}
+// https://github.com/jart/cosmopolitan/blob/b235492e715df777bd14424dc1b7f9cd0605b379/libc/calls/mungentpath.c#L25
+void mungentpath(tb_char_t *path) {
+    tb_char_t *p;
+  
+    // turn colon into semicolon
+    // unless it already looks like a dos path
+    for (p = path; *p; ++p) {
+      if (p[0] == ':' && p[1] != '\\') {
+        p[0] = ';';
+      }
+    }
+  
+    // turn /c/... into c:\...
+    p = path;
+    if (p[0] == '/' && IsAlpha(p[1]) && p[2] == '/') {
+      p[0] = p[1];
+      p[1] = ':';
+    }
+    for (; *p; ++p) {
+      if (p[0] == ';' && p[1] == '/' && IsAlpha(p[2]) && p[3] == '/') {
+        p[1] = p[2];
+        p[2] = ':';
+      }
+    }
+  
+    // turn slash into backslash
+    for (p = path; *p; ++p) {
+      if (*p == '/') {
+        *p = '\\';
+      }
+    }
+}
+#endif 
 
 tb_size_t char16_wcslen(char16_t const* s)
 {
@@ -101,7 +140,6 @@ void _get_program_file(tb_char_t* path) {
     if(tb_strstr(sysname, "windows")) {
 #if defined(TB_CONFIG_OS_WINDOWS) || defined(__COSMOPOLITAN__)
         // get the executale file path as program directory
-        printf("%lld\n", sizeof(tb_wchar_t));
     #ifdef __COSMOPOLITAN__
         char16_t buf[TB_PATH_MAXN] = { 0 };
         tb_size_t size = (tb_size_t)GetModuleFileNameW((int64_t)tb_null, (char16_t*)buf, (DWORD)TB_PATH_MAXN);
@@ -142,4 +180,8 @@ void _get_program_file(tb_char_t* path) {
             ok = tb_true;
 #endif
     }
+}
+
+void _to_windows_path(tb_char_t *path) {
+    mungentpath(path);
 }

@@ -3,23 +3,9 @@
 #include <string>
 
 #include "tbox/tbox.h"
-#include "utils.h"
+#include "utils.hpp"
 
 namespace fs = std::filesystem;
-
-std::string get_sys_name() {
-    std::string s(10, '\0');
-    _get_sys_name(s.data());
-    s.shrink_to_fit();
-    return s;
-}
-
-std::string get_program_file() {
-    std::string s(TB_PATH_MAXN, '\0');
-    _get_program_file(s.data());
-    s.shrink_to_fit();
-    return s;
-}
 
 tb_int_t main(tb_int_t argc, tb_char_t** argv) {
     std::cout << get_sys_name() << std::endl;

@@ -6,7 +6,9 @@
 #include <string>
 
 #include <doctest/doctest.h>
+
 #include "gitignore_parser.hpp"
+#include "utils.hpp"
 
 // Tests coming from the python package gitignore_parser: https://github.com/mherrmann/gitignore_parser
 
@@ -403,5 +405,11 @@ TEST_SUITE("windows style path") {
         CHECK_FALSE(matcher.is_ignored("D:\\home\\a2va\\主要的.py"));
         CHECK(matcher.is_ignored("D:\\home\\a2va\\主要的.pyc"));
         CHECK(matcher.is_ignored("D:\\home\\a2va\\dir\\主要的.pyc"));
+    }
+}
+
+TEST_SUITE("path function helper") {
+    TEST_CASE("to_windows_path") {
+        CHECK(to_windows_path("/C/home/a2va") == "C:\\home\\a2va");
     }
 }

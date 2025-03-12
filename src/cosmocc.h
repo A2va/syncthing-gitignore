@@ -1,5 +1,5 @@
-#ifndef UTILS_H
-#define UTILS_H
+#ifndef COSMOCC_UTILS_H
+#define COSMOCC_UTILS_H
 #include "tbox/tbox.h"
 
 #ifdef __cplusplus
@@ -8,6 +8,7 @@
 
 void _get_program_file(tb_char_t* path);
 void _get_sys_name(tb_char_t* path);
+void _to_windows_path(tb_char_t *path);
 
 #ifdef __cplusplus
     }
