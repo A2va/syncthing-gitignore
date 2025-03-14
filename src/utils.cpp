@@ -41,7 +41,7 @@ fs::path to_unix_path(const fs::path& path) {
 }
 
 fs::path normalize_path(const fs::path& path) {
-#ifndef _WIN32
+#ifdef __COSMOPOLITAN__
     fs::path normalized = fs::absolute(to_unix_path(path)).lexically_normal();
 #else
     fs::path normalized = fs::absolute(path).lexically_normal();

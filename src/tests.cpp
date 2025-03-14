@@ -412,4 +412,15 @@ TEST_SUITE("path function helper") {
     TEST_CASE("to_windows_path") {
         CHECK(to_windows_path("/C/home/a2va") == "C:\\home\\a2va");
     }
+    TEST_CASE("to_unix_path") {
+        CHECK(to_unix_path("C:\\home\\a2va") == "/C/home/a2va");
+        CHECK(to_unix_path("C:/home/a2va") == "/C/home/a2va");
+    }
+
+    TEST_CASE("normalize_path") {
+    #ifdef defined(__COSMOPOLITAN__)
+        CHECK(normalize_path("C:\\home\\a2va") == "/C/home/a2va");
+        CHECK(normalize_path("C:/home/a2va") == "/C/home/a2va");
+    #endif
+    }
 }
