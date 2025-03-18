@@ -25,7 +25,7 @@ tb_int_t main(tb_int_t argc, tb_char_t** argv) {
     };
 
     std::vector<GitIgnoreMatcher> gitignore_matchers;
-    fs::recursive_directory_iterator dir_iter(current_dir);
+    fs::recursive_directory_iterator dir_iter(normalize_path(current_dir));
     for (const auto& entry : dir_iter) {
         std::cout << entry.path() << std::endl;
         if (entry.path().filename() == ".gitignore") {
