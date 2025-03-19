@@ -150,6 +150,22 @@ std::set<std::string> convert_ignore_rules(const std::set<fs::path>& gitignore_f
 	return ignore_rules;
 }
 
+void save_stignore(const Config& config)
+{
+	std::ofstream ofs("stignore", std::ios::out);
+	for (const auto& rule : config.synctignore_rules)
+	{
+		ofs << rule << "\n";
+	}
+
+	ofs << "# USER RULES" << "\n";
+
+	for (const auto& rule : config.user_rules)
+	{
+		ofs << rule << "\n";
+	}
+}
+
 tb_int_t main(tb_int_t argc, tb_char_t** argv)
 {
 	const auto executable_directory = normalize_path(fs::path(get_program_file()).parent_path());
@@ -159,21 +175,38 @@ tb_int_t main(tb_int_t argc, tb_char_t** argv)
 	Config config = Config::load();
 
 	// First stignore creation if it doesn't exist
-	if (!fs::exists(executable_directory / ".stignore"))
+	if (!fs::exists(executable_directory / "stignore"))
 	{
 		const auto gitignore_files = collect_gitignore_files(executable_directory);
-		ignore_rules = convert_ignore_rules(gitignore_files);
-
-		std::ofstream ofs(".stignore", std::ios::out);
-		for (const auto& rule : ignore_rules)
-		{
-			ofs << rule << "\n";
-		}
+		config.synctignore_rules = convert_ignore_rules(gitignore_files);
+		save_stignore(config);
+		config.save();
 	}
+	else
+	{
+		std::ifstream ifs("stignore");
+		int line_num = 0;
+		std::string line;
 
-	config.synctignore_rules = ignore_rules;
-	config.save();
+		std::set<std::string> rules;
 
+		while (std::getline(ifs, line))
+		{
+			line_num++;
+			strip(line);
+			rules.insert(line);
+		}
+
+		// Consider any rule that is isn't in synctignore_rules as user rules
+		for (const auto& rule : rules)
+		{
+			if (!config.synctignore_rules.contains(rule))
+			{
+				config.user_rules.insert(rule);
+			}
+		}
+		save_stignore(config);
+	}
 
 	for (const auto& rule : ignore_rules)
 	{
