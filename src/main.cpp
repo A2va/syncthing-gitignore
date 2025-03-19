@@ -1,9 +1,9 @@
 #include <filesystem>
-#include <optional>
-#include <iostream>
 #include <fstream>
-#include <string>
+#include <iostream>
+#include <optional>
 #include <set>
+#include <string>
 
 #include "gitignore_parser.hpp"
 #include "tbox/tbox.h"
@@ -68,4 +68,48 @@ tb_int_t main(tb_int_t argc, tb_char_t** argv)
 		}
 		return false;
 	};
+
+	for (const auto& file_path : gitignore_files)
+	{
+		if (matches(file_path))
+			continue;
+
+		matchers.emplace_back(file_path, normalize_path(fs::current_path()));
+
+		fs::path gitignore_parent_path = fs::relative(file_path.parent_path());
+		std::ifstream file(file_path);
+		int line_num = 0;
+		std::string line;
+
+		std::set<std::string> ignore_rules;
+		while (std::getline(file, line))
+		{
+			line_num++;
+			strip(line);
+			if (line == "" || line.starts_with("#"))
+				continue;
+
+			std::string converted_rule;
+			if (line.starts_with("!"))
+			{
+				converted_rule += '!';
+				line = line.substr(1);
+			}
+
+			if (line.starts_with("/"))
+			{
+				converted_rule += (gitignore_parent_path.string() + line);
+				continue;
+			}
+
+			if ((line.find('/') != std::string::npos) && (line.back() != '/'))
+			{
+				converted_rule += (gitignore_parent_path.string() + '/' + line);
+				continue;
+			}
+
+			converted_rule += (gitignore_parent_path.string() + '/' + line);
+			std::cout << converted_rule << std::endl;
+		}
+	}
 }

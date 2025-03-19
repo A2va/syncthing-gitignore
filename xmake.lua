@@ -17,6 +17,7 @@ target("utils")
     add_packages("tbox", {public = true})
 
 target("synctignore")
+    set_rundir("$(projectdir)")
     add_files("src/main.cpp")
     add_deps("utils", "gitignore_parser")
 
