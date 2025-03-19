@@ -11,21 +11,6 @@
 
 namespace fs = std::filesystem;
 
-std::vector<fs::path> collect_gitignore_files(const fs::path& path)
-{
-	std::vector<fs::path> gitignore_files;
-	fs::recursive_directory_iterator dir_iter(normalize_path(path));
-	for (const auto& entry : dir_iter)
-	{
-		std::cout << entry.path() << std::endl;
-		if (entry.path().filename() == ".gitignore")
-		{
-			gitignore_files.emplace_back(entry.path());
-		}
-	}
-	return gitignore_files;
-}
-
 void strip(std::string& str)
 {
 	if (str.length() == 0)
@@ -52,11 +37,24 @@ void strip(std::string& str)
 	str = start_pos <= end_pos ? std::string(start_it, end_it.base()) : "";
 }
 
-tb_int_t main(tb_int_t argc, tb_char_t** argv)
+std::vector<fs::path> collect_gitignore_files(const fs::path& path)
 {
-	const auto executable_directory = fs::path(get_program_file()).parent_path();
-	const auto gitignore_files = collect_gitignore_files(executable_directory);
+	std::vector<fs::path> gitignore_files;
+	fs::recursive_directory_iterator dir_iter(normalize_path(path));
+	for (const auto& entry : dir_iter)
+	{
+		std::cout << entry.path() << std::endl;
+		if (entry.path().filename() == ".gitignore")
+		{
+			gitignore_files.emplace_back(entry.path());
+		}
+	}
+	return gitignore_files;
+}
 
+// Convert ignore rules from git to syncthing
+std::set<std::string> convert_ignore_rules(const std::vector<fs::path>& gitignore_files)
+{
 	std::vector<GitIgnoreMatcher> matchers;
 	const auto matches = [&matchers](const fs::path& path) {
 		for (const auto& matcher : matchers)
@@ -69,6 +67,7 @@ tb_int_t main(tb_int_t argc, tb_char_t** argv)
 		return false;
 	};
 
+	std::set<std::string> ignore_rules;
 	for (const auto& file_path : gitignore_files)
 	{
 		if (matches(file_path))
@@ -76,12 +75,11 @@ tb_int_t main(tb_int_t argc, tb_char_t** argv)
 
 		matchers.emplace_back(file_path, normalize_path(fs::current_path()));
 
-		fs::path gitignore_parent_path = fs::relative(file_path.parent_path());
+		fs::path gitignore_parent_path = fs::relative(file_path.parent_path()).lexically_normal();
 		std::ifstream file(file_path);
 		int line_num = 0;
 		std::string line;
 
-		std::set<std::string> ignore_rules;
 		while (std::getline(file, line))
 		{
 			line_num++;
@@ -89,27 +87,42 @@ tb_int_t main(tb_int_t argc, tb_char_t** argv)
 			if (line == "" || line.starts_with("#"))
 				continue;
 
-			std::string converted_rule;
+			std::string negation = "";
 			if (line.starts_with("!"))
 			{
-				converted_rule += '!';
+				negation = "!";
 				line = line.substr(1);
 			}
 
 			if (line.starts_with("/"))
 			{
-				converted_rule += (gitignore_parent_path.string() + line);
+				ignore_rules.insert(negation + gitignore_parent_path.generic_string() + line);
 				continue;
 			}
 
 			if ((line.find('/') != std::string::npos) && (line.back() != '/'))
 			{
-				converted_rule += (gitignore_parent_path.string() + '/' + line);
+				ignore_rules.insert(negation + gitignore_parent_path.generic_string() + line);
 				continue;
 			}
 
-			converted_rule += (gitignore_parent_path.string() + '/' + line);
-			std::cout << converted_rule << std::endl;
+			ignore_rules.insert(negation + gitignore_parent_path.generic_string() + '/' + line);
+			ignore_rules.insert(negation + gitignore_parent_path.generic_string() + '/' + "**" + '/' +
+								line);
 		}
+	}
+	return ignore_rules;
+}
+
+tb_int_t main(tb_int_t argc, tb_char_t** argv)
+{
+	const auto executable_directory = fs::path(get_program_file()).parent_path();
+	const auto gitignore_files = collect_gitignore_files(executable_directory);
+
+	const auto ignore_rules = convert_ignore_rules(gitignore_files);
+
+	for (const auto& rule : ignore_rules)
+	{
+		std::cout << rule << std::endl;
 	}
 }
