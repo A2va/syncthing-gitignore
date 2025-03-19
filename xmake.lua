@@ -1,5 +1,5 @@
 add_rules("mode.debug", "mode.release")
-set_languages("cxx17")
+set_languages("cxx20")
 
 add_requires("tbox", {configs = {charset = true}})
 add_requires("doctest")

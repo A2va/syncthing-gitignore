@@ -48,7 +48,7 @@ class GitIgnoreMatcher
 	{
 	}
 
-	bool is_ignored(const std::filesystem::path& path)
+	bool is_ignored(const std::filesystem::path& path) const
 	{
 		if (has_negations)
 		{
