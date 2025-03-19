@@ -24,12 +24,8 @@ struct Config
 	static Config load()
 	{
 		Config config;
-#ifdef __COSMOPOLITAN__
-		const fs::path config_path = "/zip/synctignore.json";
-#else
 		const fs::path config_path =
 			normalize_path(fs::path(get_program_file()).parent_path()) / "synctignore.json";
-#endif
 
 		if (fs::exists(config_path))
 		{
@@ -42,12 +38,8 @@ struct Config
 
 	void save()
 	{
-#ifdef __COSMOPOLITAN__
-		const fs::path config_path = "/zip/synctignore.json";
-#else
 		const fs::path config_path =
 			normalize_path(fs::path(get_program_file()).parent_path()) / "synctignore.json";
-#endif
 		json data = *this;
 		std::ofstream ofs(config_path);
 
@@ -181,6 +173,7 @@ tb_int_t main(tb_int_t argc, tb_char_t** argv)
 
 	config.synctignore_rules = ignore_rules;
 	config.save();
+
 
 	for (const auto& rule : ignore_rules)
 	{
