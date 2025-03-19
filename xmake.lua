@@ -18,13 +18,10 @@ target("utils")
 
 target("synctignore")
     add_files("src/main.cpp")
-    add_deps("utils")
+    add_deps("utils", "gitignore_parser")
 
     -- used for win32 api (also compospolitan)
     add_defines("UNICODE", "_UNICODE")
-    -- if is_plat("windows") then
-    --     add_ldflags("/LTCG")
-    -- end
 
 target("tests")
     set_default(false)
