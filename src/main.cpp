@@ -5,11 +5,55 @@
 #include <set>
 #include <string>
 
+#include <nlohmann/json.hpp>
+#include <tbox/tbox.h>
+
 #include "gitignore_parser.hpp"
-#include "tbox/tbox.h"
 #include "utils.hpp"
 
+using json = nlohmann::json;
 namespace fs = std::filesystem;
+
+struct Config
+{
+	std::set<std::string> synctignore_rules;
+	std::set<std::string> user_rules;
+	std::set<fs::path> gitignore_files;
+	NLOHMANN_DEFINE_TYPE_INTRUSIVE(Config, synctignore_rules, user_rules, gitignore_files);
+
+	static Config load()
+	{
+		Config config;
+#ifdef __COSMOPOLITAN__
+		const fs::path config_path = "/zip/synctignore.json";
+#else
+		const fs::path config_path =
+			normalize_path(fs::path(get_program_file()).parent_path()) / "synctignore.json";
+#endif
+
+		if (fs::exists(config_path))
+		{
+			std::ifstream ifs(config_path);
+			json data = json::parse(ifs);
+			config = data.template get<Config>();
+		}
+		return config;
+	}
+
+	void save()
+	{
+#ifdef __COSMOPOLITAN__
+		const fs::path config_path = "/zip/synctignore.json";
+#else
+		const fs::path config_path =
+			normalize_path(fs::path(get_program_file()).parent_path()) / "synctignore.json";
+#endif
+		json data = *this;
+		std::ofstream ofs(config_path);
+
+		ofs << data.dump(4);
+	}
+};
 
 void strip(std::string& str)
 {
@@ -37,23 +81,23 @@ void strip(std::string& str)
 	str = start_pos <= end_pos ? std::string(start_it, end_it.base()) : "";
 }
 
-std::vector<fs::path> collect_gitignore_files(const fs::path& path)
+std::set<fs::path> collect_gitignore_files(const fs::path& path)
 {
-	std::vector<fs::path> gitignore_files;
+	std::set<fs::path> gitignore_files;
 	fs::recursive_directory_iterator dir_iter(normalize_path(path));
 	for (const auto& entry : dir_iter)
 	{
 		std::cout << entry.path() << std::endl;
 		if (entry.path().filename() == ".gitignore")
 		{
-			gitignore_files.emplace_back(entry.path());
+			gitignore_files.insert(entry.path());
 		}
 	}
 	return gitignore_files;
 }
 
 // Convert ignore rules from git to syncthing
-std::set<std::string> convert_ignore_rules(const std::vector<fs::path>& gitignore_files)
+std::set<std::string> convert_ignore_rules(const std::set<fs::path>& gitignore_files)
 {
 	std::vector<GitIgnoreMatcher> matchers;
 	const auto matches = [&matchers](const fs::path& path) {
@@ -107,8 +151,8 @@ std::set<std::string> convert_ignore_rules(const std::vector<fs::path>& gitignor
 			}
 
 			ignore_rules.insert(negation + gitignore_parent_path.generic_string() + '/' + line);
-			ignore_rules.insert(negation + gitignore_parent_path.generic_string() + '/' + "**" + '/' +
-								line);
+			ignore_rules.insert(negation + gitignore_parent_path.generic_string() + '/' + "**" +
+								'/' + line);
 		}
 	}
 	return ignore_rules;
@@ -116,10 +160,27 @@ std::set<std::string> convert_ignore_rules(const std::vector<fs::path>& gitignor
 
 tb_int_t main(tb_int_t argc, tb_char_t** argv)
 {
-	const auto executable_directory = fs::path(get_program_file()).parent_path();
-	const auto gitignore_files = collect_gitignore_files(executable_directory);
+	const auto executable_directory = normalize_path(fs::path(get_program_file()).parent_path());
+	std::set<std::string> ignore_rules;
 
-	const auto ignore_rules = convert_ignore_rules(gitignore_files);
+	// Load config
+	Config config = Config::load();
+
+	// First stignore creation if it doesn't exist
+	if (!fs::exists(executable_directory / ".stignore"))
+	{
+		const auto gitignore_files = collect_gitignore_files(executable_directory);
+		ignore_rules = convert_ignore_rules(gitignore_files);
+
+		std::ofstream ofs(".stignore", std::ios::out);
+		for (const auto& rule : ignore_rules)
+		{
+			ofs << rule << "\n";
+		}
+	}
+
+	config.synctignore_rules = ignore_rules;
+	config.save();
 
 	for (const auto& rule : ignore_rules)
 	{
