@@ -68,36 +68,4 @@ tb_int_t main(tb_int_t argc, tb_char_t** argv)
 		}
 		return false;
 	};
-
-	for (const auto& file_path : gitignore_files)
-	{
-		if (matches(file_path))
-			continue;
-
-		matchers.emplace_back(file_path, normalize_path(fs::current_path()));
-
-		std::ifstream file(file_path);
-		int line_num = 0;
-		std::string line;
-
-		std::set<std::string> ignore_rules;
-		while (std::getline(file, line))
-		{
-			line_num++;
-			strip(line);
-			if (line == "" || line.find_first_of('#') != std::string::npos)
-			{
-				continue;
-			}
-
-			std::string converted_rule;
-
-
-
-
-
-		}
-
-
-	}
 }
