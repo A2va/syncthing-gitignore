@@ -15,7 +15,7 @@ package("tbox-patched")
 package_end()
 
 -- enable micro tbox because cosmocc patch will become bigger without it
-add_requires("tbox", {configs = {charset = true, micro = true}})
+add_requires("tbox-patched", {configs = {charset = true, micro = true}})
 add_requires("doctest", "nlohmann_json")
 
 target("gitignore_parser")
