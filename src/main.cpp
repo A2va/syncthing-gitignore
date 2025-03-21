@@ -271,7 +271,7 @@ tb_int_t main(tb_int_t argc, tb_char_t** argv)
 	{
 		const auto directory = file.first.parent_path();
 		tb_assert_and_check_return_val(
-			tb_fwatcher_add(fwatcher, directory.generic_string().c_str(), false), -1);
+			tb_fwatcher_add(fwatcher, directory.generic_string().c_str(), tb_false), -1);
 		watched_dirs.insert(directory);
 	}
 
@@ -287,11 +287,23 @@ tb_int_t main(tb_int_t argc, tb_char_t** argv)
 		if (tb_strstr(event.filepath, "eof"))
 			eof = tb_true;
 
-		const fs::path filename = fs::path(event.filepath).lexically_normal.filename();
-		if (tb_strcmp(status, "modified") && filename == ".gitignore")
+		const fs::path file = fs::path(event.filepath).lexically_normal();
+		if (tb_strcmp(status, "modified") && file.filename() == ".gitignore")
 		{
-			// gitgnore have change update the rules
+			// gitgnore have changed, update the rules
+			auto entry = config.gitignore_files.extract(file);
+			entry.mapped() = fs::last_write_time(file);
+
+			std::map<fs::path, fs::file_time_type> m;			
+			m.insert(std::move(entry));
+			config.synctignore_rules.merge(convert_ignore_rules(m));
+			config.gitignore_files.merge(m);
+
+			save_stignore(config);
+			config.save();
 		}
 	}
+
+	tb_fwatcher_exit(fwatcher);
 
 }
