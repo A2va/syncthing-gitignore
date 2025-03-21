@@ -108,7 +108,7 @@ std::map<fs::path, fs::file_time_type> collect_gitignore_files(const fs::path& p
 		if (entry.path().filename() == ".gitignore")
 		{
 			const auto mtime = entry.last_write_time();
-			gitignore_files.emplace(entry.path(), mtime);
+			gitignore_files.emplace(entry.path().lexically_normal(), mtime);
 		}
 	}
 	return gitignore_files;
@@ -186,8 +186,7 @@ void save_stignore(const Config& config)
 		ofs << rule << "\n";
 	}
 
-	ofs << "# USER RULES"
-		<< "\n";
+	ofs << "# USER RULES" << "\n";
 
 	for (const auto& rule : config.user_rules)
 	{
@@ -263,4 +262,36 @@ tb_int_t main(tb_int_t argc, tb_char_t** argv)
 		config.save();
 		save_stignore(config);
 	}
+
+	std::set<fs::path> watched_dirs;
+
+	// Setup file watcher
+	tb_fwatcher_ref_t fwatcher = tb_fwatcher_init();
+	for (const auto& file : config.gitignore_files)
+	{
+		const auto directory = file.first.parent_path();
+		tb_assert_and_check_return_val(
+			tb_fwatcher_add(fwatcher, directory.generic_string().c_str(), false), -1);
+		watched_dirs.insert(directory);
+	}
+
+	tb_bool_t eof = tb_false;
+	tb_fwatcher_event_t event;
+	while (!eof && tb_fwatcher_wait(fwatcher, &event, -1) >= 0)
+	{
+		tb_char_t const* status =
+			event.event & TB_FWATCHER_EVENT_CREATE
+				? "created"
+				: (event.event & TB_FWATCHER_EVENT_MODIFY ? "modified" : "deleted");
+		tb_trace_i("watch: %s %s", event.filepath, status);
+		if (tb_strstr(event.filepath, "eof"))
+			eof = tb_true;
+
+		const fs::path filename = fs::path(event.filepath).lexically_normal.filename();
+		if (tb_strcmp(status, "modified") && filename == ".gitignore")
+		{
+			// gitgnore have change update the rules
+		}
+	}
+
 }
