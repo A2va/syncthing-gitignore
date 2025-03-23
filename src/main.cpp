@@ -265,6 +265,15 @@ tb_int_t main(tb_int_t argc, tb_char_t** argv)
 		save_stignore(config);
 	}
 
+
+	// As a cosmocc program is compiled on linux, the file watcher relies on inotify function
+	// but those are not avaivable on other platform than linux with cosmocc
+	// So disable the file watching altogether.
+	// https://github.com/jart/cosmopolitan/blob/5eb7cd664393d8a3420cbfe042cfc3d7c7b2670d/libc/sysv/syscalls.sh#L270 
+#ifdef __COSMOPOLITAN__
+	return 0;
+#endif
+
 	std::set<fs::path> watched_dirs;
 
 	// Setup file watcher
