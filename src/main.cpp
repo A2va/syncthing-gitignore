@@ -196,6 +196,8 @@ void save_stignore(const Config& config)
 
 tb_int_t main(tb_int_t argc, tb_char_t** argv)
 {
+	if (!tb_init(tb_null, tb_null))
+		return -1;
 	const auto executable_directory = normalize_path(fs::path(get_program_file()).parent_path());
 
 	// Load config
@@ -271,7 +273,7 @@ tb_int_t main(tb_int_t argc, tb_char_t** argv)
 	{
 		const auto directory = file.first.parent_path();
 		tb_assert_and_check_return_val(
-			tb_fwatcher_add(fwatcher, directory.generic_string().c_str(), tb_false), -1);
+			tb_fwatcher_add(fwatcher, directory.generic_string().c_str(), tb_false), tb_true);
 		watched_dirs.insert(directory);
 	}
 
@@ -294,7 +296,7 @@ tb_int_t main(tb_int_t argc, tb_char_t** argv)
 			auto entry = config.gitignore_files.extract(file);
 			entry.mapped() = fs::last_write_time(file);
 
-			std::map<fs::path, fs::file_time_type> m;			
+			std::map<fs::path, fs::file_time_type> m;
 			m.insert(std::move(entry));
 			config.synctignore_rules.merge(convert_ignore_rules(m));
 			config.gitignore_files.merge(m);
@@ -305,5 +307,5 @@ tb_int_t main(tb_int_t argc, tb_char_t** argv)
 	}
 
 	tb_fwatcher_exit(fwatcher);
-
+	return 0;
 }
