@@ -104,9 +104,9 @@ std::map<fs::path, fs::file_time_type> collect_gitignore_files(const fs::path& p
 	fs::recursive_directory_iterator dir_iter(normalize_path(path));
 	for (const auto& entry : dir_iter)
 	{
-		std::cout << entry.path() << std::endl;
 		if (entry.path().filename() == ".gitignore")
 		{
+			std::cout << entry.path() << std::endl;
 			const auto mtime = entry.last_write_time();
 			gitignore_files.emplace(entry.path().lexically_normal(), mtime);
 		}
@@ -140,6 +140,10 @@ std::set<std::string> convert_ignore_rules(
 		matchers.emplace_back(file_path, normalize_path(fs::current_path()));
 
 		fs::path gitignore_parent_path = fs::relative(file_path.parent_path()).lexically_normal();
+		// If the relative path is just ".", make it an empty path
+		if (gitignore_parent_path == ".")
+			gitignore_parent_path = "";
+
 		std::ifstream ifs(file_path);
 		int line_num = 0;
 		std::string line;
@@ -229,7 +233,8 @@ tb_int_t main(tb_int_t argc, tb_char_t** argv)
 		// Consider any rule that is isn't in synctignore_rules as user rules
 		for (const auto& rule : rules)
 		{
-			if (!config.synctignore_rules.contains(rule))
+
+			if ((config.synctignore_rules.contains(rule) || rule.starts_with("#")) == 0)
 			{
 				config.user_rules.insert(rule);
 			}
@@ -265,11 +270,10 @@ tb_int_t main(tb_int_t argc, tb_char_t** argv)
 		save_stignore(config);
 	}
 
-
 	// As a cosmocc program is compiled on linux, the file watcher relies on inotify function
 	// but those are not avaivable on other platform than linux with cosmocc
 	// So disable the file watching altogether.
-	// https://github.com/jart/cosmopolitan/blob/5eb7cd664393d8a3420cbfe042cfc3d7c7b2670d/libc/sysv/syscalls.sh#L270 
+	// https://github.com/jart/cosmopolitan/blob/5eb7cd664393d8a3420cbfe042cfc3d7c7b2670d/libc/sysv/syscalls.sh#L270
 #ifdef __COSMOPOLITAN__
 	return 0;
 #endif
@@ -299,7 +303,7 @@ tb_int_t main(tb_int_t argc, tb_char_t** argv)
 			eof = tb_true;
 
 		const fs::path file = fs::path(event.filepath).lexically_normal();
-		if (tb_strcmp(status, "modified") && file.filename() == ".gitignore")
+		if ((event.event & TB_FWATCHER_EVENT_MODIFY) && (file.filename() == ".gitignore"))
 		{
 			// gitgnore have changed, update the rules
 			auto entry = config.gitignore_files.extract(file);
