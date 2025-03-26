@@ -29,6 +29,7 @@ jobs:
 
     - name: Tests
       run: |
+        xmake
         xmake b tests
         xmake run tests
 
