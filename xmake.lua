@@ -24,6 +24,11 @@ target("synctignore")
 
     -- used for win32 api (also compospolitan)
     add_defines("UNICODE", "_UNICODE")
+    on_load(function (target)
+        if get_config("toolchain") == "cosmocc" then
+            target:add("suffixname", "cosmocc")
+        end
+    end)
 
 target("tests")
     set_default(false)

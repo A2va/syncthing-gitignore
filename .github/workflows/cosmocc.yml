@@ -1,4 +1,4 @@
-name: Build
+name: Cosmocc Build
 
 on:
   push:
@@ -9,12 +9,7 @@ on:
 
 jobs:
   build:
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-        arch: [x86_64]
-
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v4
@@ -22,15 +17,25 @@ jobs:
     - uses: olegtarasov/get-tag@v2.1.4
       id: tagName
 
+    - name: Setup Cosmocc
+      uses: bjia56/setup-cosmocc@main
+      with:
+        version: "4.0.2"
+
     - name: Setup xmake
       uses: xmake-io/github-action-setup-xmake@v1
       with:
         xmake-version: branch@dev
 
+    - name: Build project
+      run: |
+        xmake f -p linux --toolchain=cosmocc -y -cvD
+        xmake
+
     - name: Tests
       run: |
-        xmake b tests
-        xmake run tests
+       xmake b tests
+       xmake run tests
 
     - name: Create release bundle
       run: |
@@ -39,8 +44,8 @@ jobs:
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: synctignore.${{ matrix.os }}.${{ matrix.arch }}
-        path: artifacts
+        name: synctignore.cosmocc
+        path: artifacts # Upload artifact already create a zip file
 
     - name: Upload to release
       if: github.event_name == 'release'
@@ -48,4 +53,4 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        files: ${{ matrix.os == 'windows' && 'artifacts/bin/synctignore.exe' || 'artifacts/bin/synctignore' }} 
+        files: artifacts/bin/synctignore
