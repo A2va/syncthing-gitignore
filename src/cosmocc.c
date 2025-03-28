@@ -1,7 +1,8 @@
-#include "cosmocc.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <uchar.h>
 
+#include "cosmocc.h"
 #ifndef TB_CONFIG_OS_WINDOWS
 	#include <unistd.h>
 #endif
@@ -12,7 +13,9 @@
 	#include <libc/proc/ntspawn.h>
 	#include <sys/utsname.h>
 	#include <windowsesque.h>
+	#define LSTATUS LONG
 	#define GetModuleFileNameW GetModuleFileName
+	#define KEY_SET_VALUE 0x00000002 // Remove after the new cosmocc update
 #endif
 
 // proc/self
@@ -73,7 +76,7 @@ void mungentpath(tb_char_t* path)
 }
 #endif
 
-tb_size_t char16_wcslen(char16_t const* s)
+static tb_size_t char16_wcslen(char16_t const* s)
 {
 	tb_assert_and_check_return_val(s, 0);
 
@@ -120,6 +123,35 @@ inline static tb_size_t char16_wcstombs_charset(tb_char_t* s1, char16_t const* s
 	// strip
 	if (r >= 0)
 		s1[r] = '\0';
+
+	// ok?
+	return r > 0 ? r : -1;
+}
+
+inline static tb_size_t char16_mbstowcs_charset(char16_t* s1, tb_char_t const* s2, tb_size_t n)
+{
+	// check
+	tb_assert_and_check_return_val(s1 && s2, 0);
+
+	// init
+	tb_long_t r = 0;
+	tb_size_t l = tb_strlen(s2);
+
+	// mbstow
+	if (l)
+	{
+		tb_size_t e = (sizeof(char16_t) == 4) ? TB_CHARSET_TYPE_UTF32 : TB_CHARSET_TYPE_UTF16;
+		r = tb_charset_conv_data(TB_CHARSET_TYPE_UTF8, e | TB_CHARSET_TYPE_LE, (tb_byte_t const*)s2,
+								 l, (tb_byte_t*)s1, n * sizeof(char16_t));
+
+		// convert bytes to char16_t count
+		if (r >= 0)
+			r /= sizeof(char16_t);
+	}
+
+	// null-terminate
+	if (r >= 0)
+		s1[r] = 0;
 
 	// ok?
 	return r > 0 ? r : -1;
@@ -208,4 +240,119 @@ void _get_program_file(tb_char_t* path)
 void _to_windows_path(tb_char_t* path)
 {
 	mungentpath(path);
+}
+
+int _enable_autostart(const tb_char_t* path)
+{
+	tb_char_t sysname[16];
+	_get_sys_name(sysname);
+
+	if (tb_strstr(sysname, "windows"))
+	{
+#if defined(TB_CONFIG_OS_WINDOWS) || defined(__COSMOPOLITAN__)
+		HKEY hKey;
+	#if defined(__COSMOPOLITAN__)
+		char16_t key_path[128];
+		char16_mbstowcs_charset(key_path, "synctignore", char16_wcslen(key_path));
+	#else
+		const char* key_path = "Software\\Microsoft\\Windows\\CurrentVersion\\Run";
+	#endif
+
+		if (RegOpenKeyEx(HKEY_CURRENT_USER, key_path, 0, KEY_SET_VALUE, &hKey) == ERROR_SUCCESS)
+		{
+	#if defined(__COSMOPOLITAN__)
+			char16_t value_name[128];
+			char16_mbstowcs_charset(value_name, "synctignore", char16_wcslen(value_name));
+	#else
+			const char* value_name = "synctignore";
+	#endif
+
+			LSTATUS ret = RegSetValueEx(hKey, value_name, 0, REG_SZ, path, (strlen(path) + 1));
+			if (ret != ERROR_SUCCESS)
+			{
+				tb_trace_w("Failed to add to startup program");
+				return 1;
+			}
+			RegCloseKey(hKey);
+		}
+		else
+		{
+			tb_trace_w("Failed to open key");
+			return 1;
+		}
+#endif
+	}
+	else
+	{
+		// Check if the program is already in the crontab.
+		char check_cmd[TB_PATH_MAXN];
+		snprintf(check_cmd, sizeof(check_cmd), "crontab -l 2>/dev/null | grep -q '@reboot \"%s\"'",
+				 path);
+
+		if (system(check_cmd) == 0)
+		{
+			return 0;
+		}
+
+		char cmd[TB_PATH_MAXN];
+		// Quote the program_path so that spaces are handled correctly.
+		snprintf(cmd, sizeof(cmd),
+				 "(crontab -l 2>/dev/null; echo '@reboot \"%s\"') | sort -u | crontab -", path);
+		if (system(cmd) != 0)
+		{
+			tb_trace_w("Failed to add to startup program");
+			return 1;
+		}
+	}
+	return 0;
+}
+
+int _disable_autostart(const tb_char_t* path)
+{
+	tb_char_t sysname[16];
+	_get_sys_name(sysname);
+
+	if (tb_strstr(sysname, "windows"))
+	{
+#if defined(TB_CONFIG_OS_WINDOWS) || defined(__COSMOPOLITAN__)
+		HKEY hKey;
+		#if defined(__COSMOPOLITAN__)
+		char16_t key_path[128];
+		char16_mbstowcs_charset(key_path, "synctignore", char16_wcslen(key_path));
+	#else
+		const char* key_path = "Software\\Microsoft\\Windows\\CurrentVersion\\Run";
+	#endif
+		if (RegOpenKeyEx(HKEY_CURRENT_USER, key_path, 0, KEY_SET_VALUE, &hKey) == ERROR_SUCCESS)
+		{
+			#if defined(__COSMOPOLITAN__)
+			char16_t value_name[128];
+			char16_mbstowcs_charset(value_name, "synctignore", char16_wcslen(value_name));
+	#else
+			const char* value_name = "synctignore";
+	#endif
+			LSTATUS ret = RegDeleteValue(hKey, value_name);
+			if (ret != ERROR_SUCCESS)
+			{
+				tb_trace_w("Failed to remove from startup program");
+				return 1;
+			}
+			RegCloseKey(hKey);
+		}
+		else
+		{
+			tb_trace_w("Failed to open key");
+			return 1;
+		}
+#endif
+	}
+	else
+	{
+		int ret = system("crontab -l | grep -v 'synctignore' | crontab -");
+		if (ret != 0)
+		{
+			tb_trace_w("Failed to remove from startup program");
+			return 1;
+		}
+	}
+	return 0;
 }
