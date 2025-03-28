@@ -5,6 +5,7 @@
 #include "utils.hpp"
 
 namespace fs = std::filesystem;
+
 std::string get_sys_name()
 {
 	std::string s(10, '\0');
@@ -33,6 +34,12 @@ void disable_autostart()
 	std::string program_path = get_program_file();
 	int ret = _disable_autostart(program_path.c_str());
 	assert(_disable_autostart(program_path.c_str()) == 0);
+}
+
+bool is_running()
+{
+	std::string program_path = get_program_file();
+	return _is_running(program_path.c_str());
 }
 
 fs::path to_windows_path(const fs::path& path)

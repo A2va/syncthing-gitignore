@@ -1,7 +1,7 @@
 add_rules("mode.debug", "mode.release")
 set_languages("cxx20")
 
-add_requires("tbox", {configs = {charset = true}})
+add_requires("tbox", {configs = {charset = true, hash = true}})
 add_requires("doctest", "nlohmann_json")
 
 if is_plat("windows") then
@@ -19,7 +19,7 @@ target("gitignore_parser")
 target("utils")
     set_kind("static")
     add_files("src/cosmocc.c", "src/utils.cpp")
-    add_headerfiles("src/cosmocc.h")
+    add_headerfiles("src/cosmocc.h", "src/utils.hpp")
     add_packages("tbox", {public = true})
 
 target("synctignore")

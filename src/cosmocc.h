@@ -14,6 +14,8 @@ extern "C"
 	int _enable_autostart(const tb_char_t* path);
 	int _disable_autostart(const tb_char_t* path);
 
+	tb_bool_t _is_running(const tb_char_t* path);
+
 #ifdef __cplusplus
 }
 #endif

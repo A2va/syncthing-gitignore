@@ -1,10 +1,14 @@
+#include <atomic>
 #include <chrono>
+#include <csignal>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <optional>
 #include <set>
 #include <string>
+#include <mutex>
+#include <thread>
 
 #include <nlohmann/json.hpp>
 #include <tbox/tbox.h>
@@ -14,6 +18,8 @@
 
 using json = nlohmann::json;
 namespace fs = std::filesystem;
+
+std::atomic<bool> reload_requested;
 
 namespace nlohmann
 {
@@ -203,10 +209,73 @@ tb_int_t main(tb_int_t argc, tb_char_t** argv)
 {
 	if (!tb_init(tb_null, tb_null))
 		return -1;
+
+	if (is_running())
+	{
+		// Raise a signal for the already running instance
+		std::raise(SIGINT);
+		return 0;
+	}
+
+	const auto signal_handler = [](int signum) {
+		if (signum == SIGINT)
+		{
+			reload_requested.store(true);
+		}
+	};
+	std::signal(SIGINT, signal_handler);
+
 	const auto executable_directory = normalize_path(fs::path(get_program_file()).parent_path());
 
 	// Load config
 	Config config = Config::load();
+
+	std::mutex mutex;
+	std::atomic<bool> stop_thread;
+	std::thread poll([&mutex, &config, &executable_directory, &stop_thread] {
+		while (!stop_thread.load())
+		{
+			if (reload_requested.load())
+			{
+				// Reload
+				std::unique_lock<std::mutex> lock(mutex);
+				reload_requested.store(false); // Reset the flag
+
+				// Check if some gitignore files were modified, update stignore rules accordingly
+				const auto gitignore_files = collect_gitignore_files(executable_directory);
+				std::map<fs::path, fs::file_time_type> updated_gitignore;
+				for (const auto& file : gitignore_files)
+				{
+
+					const auto existing_file_entry = config.gitignore_files.find(file.first);
+					// New discovered file
+					if (existing_file_entry == config.gitignore_files.end())
+					{
+						updated_gitignore.insert(file);
+						continue;
+					}
+
+					// File was modified
+					if (file.second > existing_file_entry->second)
+					{
+						updated_gitignore.insert(file);
+						config.gitignore_files.erase(existing_file_entry);
+					}
+				}
+
+				// Update the config with the updated files/ rules
+				config.synctignore_rules.merge(convert_ignore_rules(updated_gitignore));
+				config.gitignore_files.merge(updated_gitignore);
+
+				config.save();
+				save_stignore(config);
+
+				lock.unlock();
+				using namespace std::chrono_literals;
+				std::this_thread::sleep_for(100ms);
+			}
+		}
+	});
 
 	// First stignore creation if it doesn't exist
 	if (!fs::exists(".stignore"))
@@ -306,6 +375,7 @@ tb_int_t main(tb_int_t argc, tb_char_t** argv)
 		const fs::path file = fs::path(event.filepath).lexically_normal();
 		if ((event.event & TB_FWATCHER_EVENT_MODIFY) && (file.filename() == ".gitignore"))
 		{
+			std::lock_guard<std::mutex> lock(mutex); 
 			// gitgnore have changed, update the rules
 			auto entry = config.gitignore_files.extract(file);
 			entry.mapped() = fs::last_write_time(file);
@@ -320,6 +390,8 @@ tb_int_t main(tb_int_t argc, tb_char_t** argv)
 		}
 	}
 
+	stop_thread.store(true);
+	poll.join();
 	tb_fwatcher_exit(fwatcher);
 	return 0;
 }

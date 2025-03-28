@@ -5,6 +5,8 @@
 #include "cosmocc.h"
 #ifndef TB_CONFIG_OS_WINDOWS
 	#include <unistd.h>
+	#include <fcntl.h>
+	#include <sys/file.h>
 #endif
 
 #if defined(TB_CONFIG_OS_WINDOWS)
@@ -316,7 +318,7 @@ int _disable_autostart(const tb_char_t* path)
 	{
 #if defined(TB_CONFIG_OS_WINDOWS) || defined(__COSMOPOLITAN__)
 		HKEY hKey;
-		#if defined(__COSMOPOLITAN__)
+	#if defined(__COSMOPOLITAN__)
 		char16_t key_path[128];
 		char16_mbstowcs_charset(key_path, "synctignore", char16_wcslen(key_path));
 	#else
@@ -324,7 +326,7 @@ int _disable_autostart(const tb_char_t* path)
 	#endif
 		if (RegOpenKeyEx(HKEY_CURRENT_USER, key_path, 0, KEY_SET_VALUE, &hKey) == ERROR_SUCCESS)
 		{
-			#if defined(__COSMOPOLITAN__)
+	#if defined(__COSMOPOLITAN__)
 			char16_t value_name[128];
 			char16_mbstowcs_charset(value_name, "synctignore", char16_wcslen(value_name));
 	#else
@@ -355,4 +357,57 @@ int _disable_autostart(const tb_char_t* path)
 		}
 	}
 	return 0;
+}
+
+tb_bool_t _is_running(const tb_char_t* path)
+{
+	tb_char_t sysname[16];
+	_get_sys_name(sysname);
+
+	tb_char_t uuid[37];
+	tb_uuid_make_cstr(uuid, path);
+
+	if (tb_strstr(sysname, "windows") && TB_CONFIG_OS_WINDOWS)
+	{
+#ifdef TB_CONFIG_OS_WINDOWS
+
+		tb_char_t mutex_name[256];
+		snprintf(mutex_name, sizeof(mutex_name), "Global\\MyUniqueProgramNameMutex_%s", uuid);
+
+		HANDLE hMutex = CreateMutexA(NULL, TRUE, "Global\\MyUniqueProgramNameMutex");
+		if (hMutex == NULL)
+		{
+			// If the mutex cannot be created, assume an instance is running.
+			return tb_true;
+		}
+		// If the mutex already exists, GetLastError will return ERROR_ALREADY_EXISTS.
+		if (GetLastError() == ERROR_ALREADY_EXISTS)
+		{
+			CloseHandle(hMutex);
+			return tb_true;
+		}
+
+#endif
+	}
+	else
+	{
+#ifdef TB_CONFIG_OS_LINUX
+		char lock_file[256];
+		snprintf(lock_file, sizeof(lock_file), "/tmp/myprogram_%s.lock", uuid);
+
+		int fd = open(lock_file, O_RDWR | O_CREAT, 0640);
+		if (fd < 0)
+		{
+			perror("open");
+			exit(EXIT_FAILURE);
+		}
+		if (flock(fd, LOCK_EX | LOCK_NB) < 0)
+		{
+			close(fd);
+			return tb_true;
+		}
+#endif
+	}
+
+	return tb_false;
 }
