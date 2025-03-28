@@ -182,9 +182,7 @@ bool IgnoreRule::match(const fs::path& abs_path) const
 		if (base_path)
 		{
 			fs::path directory = rel_path.parent_path();
-			fs::path base_p = base_path.value();
-			if (std::mismatch(base_p.begin(), base_p.end(), directory.begin()).first !=
-				base_p.end())
+			if (!base_path.value().compare(directory))
 			{
 
 				// throw std::runtime_error("Given path is not in the subpath of the base path");

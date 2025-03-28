@@ -1,5 +1,5 @@
-#include <filesystem>
 #include <algorithm>
+#include <filesystem>
 
 #include "utils.hpp"
 
@@ -53,21 +53,23 @@ fs::path normalize_path(const fs::path& path)
 	fs::path normalized = fs::absolute(path).lexically_normal();
 #endif
 
+	// Convert to forward slashes for consistent matching
+	std::string normalized_str = normalized.string();
+	std::replace(normalized_str.begin(), normalized_str.end(), '\\', '/');
+	normalized = fs::path(normalized_str);
+
 	// Strip trailing slash/backslash if the path isn't already the root directory
 	if (!normalized.empty())
 	{
-
 		if ((normalized != normalized.root_path()) && !normalized.has_filename())
 		{
 			normalized = normalized.parent_path();
 		}
 	}
 
-	// // Absolute remove the dot from an empty extension
 	if (!path.empty() && path.extension() == ".")
 	{
 		fs::path filename = path.filename();
-
 		filename += ".";
 		normalized = normalized.parent_path() / filename;
 	}
