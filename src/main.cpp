@@ -190,7 +190,8 @@ void save_stignore(const Config& config)
 		ofs << rule << "\n";
 	}
 
-	ofs << "# USER RULES" << "\n";
+	ofs << "# USER RULES"
+		<< "\n";
 
 	for (const auto& rule : config.user_rules)
 	{

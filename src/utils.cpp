@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cassert>
 #include <filesystem>
 
 #include "utils.hpp"
@@ -18,6 +19,20 @@ std::string get_program_file()
 	_get_program_file(s.data());
 	s.shrink_to_fit();
 	return s;
+}
+
+void enable_autostart()
+{
+	std::string program_path = get_program_file();
+	int ret = _enable_autostart(program_path.c_str());
+	assert(_enable_autostart(program_path.c_str()) == 0);
+}
+
+void disable_autostart()
+{
+	std::string program_path = get_program_file();
+	int ret = _disable_autostart(program_path.c_str());
+	assert(_disable_autostart(program_path.c_str()) == 0);
 }
 
 fs::path to_windows_path(const fs::path& path)

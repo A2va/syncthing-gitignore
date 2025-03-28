@@ -4,6 +4,12 @@ set_languages("cxx20")
 add_requires("tbox", {configs = {charset = true}})
 add_requires("doctest", "nlohmann_json")
 
+if is_plat("windows") then
+    add_ldflags("/LTCG")
+    -- for registry function
+    add_syslinks("advapi32")
+end
+
 target("gitignore_parser")
     set_kind("static")
     add_files("src/gitignore_parser.cpp")

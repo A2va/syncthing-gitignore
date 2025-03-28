@@ -11,6 +11,9 @@ extern "C"
 	void _get_sys_name(tb_char_t* path);
 	void _to_windows_path(tb_char_t* path);
 
+	int _enable_autostart(const tb_char_t* path);
+	int _disable_autostart(const tb_char_t* path);
+
 #ifdef __cplusplus
 }
 #endif
