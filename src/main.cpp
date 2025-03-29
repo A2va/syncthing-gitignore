@@ -322,7 +322,7 @@ tb_int_t main(tb_int_t argc, tb_char_t** argv)
 	}
 
 	std::string arg1 = std::string(argv[1]);
-	if(arg1 == "nowatch" || arg == "nw") {
+	if(arg1 == "nowatch" || arg1 == "nw") {
 		return 0;
 	} 
 
