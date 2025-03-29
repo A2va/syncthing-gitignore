@@ -367,14 +367,20 @@ tb_bool_t _is_running(const tb_char_t* path)
 	tb_char_t uuid[37];
 	tb_uuid_make_cstr(uuid, path);
 
-	if (tb_strstr(sysname, "windows") && TB_CONFIG_OS_WINDOWS)
+#ifdef TB_CONFIG_OS_WINDOWS
+	const tb_bool_t native_windows = tb_true;
+#else
+	const tb_bool_t native_windows = tb_false;
+#endif
+
+	if (tb_strstr(sysname, "windows") && native_windows)
 	{
 #ifdef TB_CONFIG_OS_WINDOWS
 
 		tb_char_t mutex_name[256];
 		snprintf(mutex_name, sizeof(mutex_name), "Global\\MyUniqueProgramNameMutex_%s", uuid);
 
-		HANDLE hMutex = CreateMutexA(NULL, TRUE, "Global\\MyUniqueProgramNameMutex");
+		HANDLE hMutex = CreateMutexA(NULL, TRUE, mutex_name);
 		if (hMutex == NULL)
 		{
 			// If the mutex cannot be created, assume an instance is running.
@@ -386,7 +392,6 @@ tb_bool_t _is_running(const tb_char_t* path)
 			CloseHandle(hMutex);
 			return tb_true;
 		}
-
 #endif
 	}
 	else
