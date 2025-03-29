@@ -8,6 +8,7 @@ if is_plat("windows") then
     add_ldflags("/LTCG")
     -- for registry function
     add_syslinks("advapi32")
+    add_ldflags("/SUBSYSTEM:WINDOWS")
 end
 
 target("gitignore_parser")

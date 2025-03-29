@@ -286,14 +286,12 @@ tb_int_t main(tb_int_t argc, tb_char_t** argv)
 	};
 	std::signal(SIGINT, signal_handler);
 
-	const auto executable_directory = normalize_path(fs::path(get_program_file()).parent_path());
-
 	// Load config
 	Config config = Config::load();
 
 	std::mutex mutex;
 	std::atomic<bool> stop_thread;
-	std::thread poll([&mutex, &config, &executable_directory, &stop_thread] {
+	std::thread poll([&mutex, &config, &stop_thread] {
 		while (!stop_thread.load())
 		{
 			std::unique_lock<std::mutex> lock(mutex);
@@ -322,6 +320,11 @@ tb_int_t main(tb_int_t argc, tb_char_t** argv)
 		load_stignore(config);
 		update_stignore(config);
 	}
+
+	std::string arg1 = std::string(argv[1]);
+	if(arg1 == "nowatch" || arg == "nw") {
+		return 0;
+	} 
 
 	// As a cosmocc program is compiled on linux, the file watcher relies on inotify function
 	// but those are not avaivable on other platform than linux with cosmocc
