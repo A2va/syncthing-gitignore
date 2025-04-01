@@ -52,11 +52,13 @@ struct Config
 	std::set<std::string> synctignore_rules;
 	std::set<std::string> user_rules;
 	std::map<fs::path, fs::file_time_type> gitignore_files;
-	NLOHMANN_DEFINE_TYPE_INTRUSIVE(Config, synctignore_rules, user_rules, gitignore_files);
+	bool autostart;
+	NLOHMANN_DEFINE_TYPE_INTRUSIVE(Config, synctignore_rules, user_rules, gitignore_files, autostart);
 
 	static Config load()
 	{
 		Config config;
+		config.autostart = false;
 		const fs::path config_path =
 			normalize_path(fs::path(get_program_file()).parent_path()) / "synctignore.json";
 
@@ -192,13 +194,14 @@ std::set<std::string> convert_ignore_rules(
 
 void save_stignore(const Config& config)
 {
+	tb_trace_i("[save stignore]");
 	std::ofstream ofs(".stignore", std::ios::out);
 	for (const auto& rule : config.synctignore_rules)
 	{
 		ofs << rule << "\n";
 	}
 
-	ofs << "# USER RULES" << "\n";
+	ofs << "// USER RULES" << "\n";
 
 	for (const auto& rule : config.user_rules)
 	{
@@ -208,6 +211,7 @@ void save_stignore(const Config& config)
 
 void load_stignore(Config& config)
 {
+	tb_trace_i("[load stignore]");
 	std::ifstream ifs(".stignore");
 	int line_num = 0;
 	std::string line;
@@ -267,12 +271,15 @@ void update_stignore(Config& config)
 
 tb_int_t main(tb_int_t argc, tb_char_t** argv)
 {
+
+	
 	if (!tb_init(tb_null, tb_null))
 		return -1;
 
 	if (is_running())
 	{
 		// Raise a signal for the already running instance
+		// TODO Fix signal sending (not that simple)
 		std::raise(SIGINT);
 		return 0;
 	}
@@ -288,6 +295,9 @@ tb_int_t main(tb_int_t argc, tb_char_t** argv)
 
 	// Load config
 	Config config = Config::load();
+	if(config.autostart) {
+		enable_autostart();
+	}
 
 	std::mutex mutex;
 	std::atomic<bool> stop_thread;
@@ -297,8 +307,9 @@ tb_int_t main(tb_int_t argc, tb_char_t** argv)
 			std::unique_lock<std::mutex> lock(mutex);
 			cv.wait(lock, [] { return reload_requested.load(); });
 
+			tb_trace_i("[new gitignore] user requested a new scan");
 			update_stignore(config);
-
+			// TODO add the new file to the file watcher
 			lock.unlock();
 			using namespace std::chrono_literals;
 			std::this_thread::sleep_for(100ms);
@@ -309,6 +320,8 @@ tb_int_t main(tb_int_t argc, tb_char_t** argv)
 	// First stignore creation if it doesn't exist
 	if (!fs::exists(".stignore"))
 	{
+		const auto executable_directory =
+			normalize_path(fs::path(get_program_file()).parent_path());
 		const auto gitignore_files = collect_gitignore_files(executable_directory);
 		config.synctignore_rules = convert_ignore_rules(gitignore_files);
 		config.gitignore_files = gitignore_files;
@@ -321,9 +334,15 @@ tb_int_t main(tb_int_t argc, tb_char_t** argv)
 		update_stignore(config);
 	}
 
-	std::string arg1 = std::string(argv[1]);
-	if(arg1 == "nowatch" || arg1 == "nw") {
-		return 0;
+
+	if (argc > 1)
+	{
+		std::string arg1 = std::string(argv[1]);
+		if (arg1 == "nowatch" || arg1 == "nw")
+		{
+			tb_trace_i("[nowatch] quit without watching");
+			return 0;
+		}
 	} 
 
 	// As a cosmocc program is compiled on linux, the file watcher relies on inotify function
@@ -350,17 +369,14 @@ tb_int_t main(tb_int_t argc, tb_char_t** argv)
 	tb_fwatcher_event_t event;
 	while (!eof && tb_fwatcher_wait(fwatcher, &event, -1) >= 0)
 	{
-		tb_char_t const* status =
-			event.event & TB_FWATCHER_EVENT_CREATE
-				? "created"
-				: (event.event & TB_FWATCHER_EVENT_MODIFY ? "modified" : "deleted");
-		tb_trace_i("watch: %s %s", event.filepath, status);
 		if (tb_strstr(event.filepath, "eof"))
 			eof = tb_true;
 
 		const fs::path file = fs::path(event.filepath).lexically_normal();
 		if ((event.event & TB_FWATCHER_EVENT_MODIFY) && (file.filename() == ".gitignore"))
 		{
+
+			tb_trace_i("[watcher] gitignore modified at : %s", file.c_str());
 			std::lock_guard<std::mutex> lock(mutex);
 			// gitgnore have changed, update the rules
 			auto entry = config.gitignore_files.extract(file);
