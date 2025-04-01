@@ -1,4 +1,5 @@
 #include <condition_variable>
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <csignal>
@@ -19,9 +20,6 @@
 
 using json = nlohmann::json;
 namespace fs = std::filesystem;
-
-std::condition_variable cv;
-std::atomic<bool> reload_requested;
 
 namespace nlohmann
 {
@@ -53,7 +51,8 @@ struct Config
 	std::set<std::string> user_rules;
 	std::map<fs::path, fs::file_time_type> gitignore_files;
 	bool autostart;
-	NLOHMANN_DEFINE_TYPE_INTRUSIVE(Config, synctignore_rules, user_rules, gitignore_files, autostart);
+	NLOHMANN_DEFINE_TYPE_INTRUSIVE(Config, synctignore_rules, user_rules, gitignore_files,
+								   autostart);
 
 	static Config load()
 	{
@@ -228,7 +227,7 @@ void load_stignore(Config& config)
 	for (const auto& rule : rules)
 	{
 
-		if ((config.synctignore_rules.contains(rule) || rule.starts_with("#")) == false)
+		if ((config.synctignore_rules.contains(rule) || rule.starts_with("//")) == false)
 		{
 			config.user_rules.insert(rule);
 		}
@@ -272,48 +271,103 @@ void update_stignore(Config& config)
 tb_int_t main(tb_int_t argc, tb_char_t** argv)
 {
 
-	
 	if (!tb_init(tb_null, tb_null))
 		return -1;
 
 	if (is_running())
 	{
+		tb_trace_i("[main] Already running");
 		// Raise a signal for the already running instance
-		// TODO Fix signal sending (not that simple)
-		std::raise(SIGINT);
+		tb_socket_ref_t sock = tb_socket_init(TB_SOCKET_TYPE_TCP, TB_IPADDR_FAMILY_IPV4);
+
+		tb_ipaddr_t addr;
+		tb_ipaddr_set(&addr, "127.0.0.1", 8484, TB_IPADDR_FAMILY_IPV4);
+
+		tb_long_t ok;
+		while (!(ok = tb_socket_connect(sock, &addr)))
+		{
+			// wait it
+			if (tb_socket_wait(sock, TB_SOCKET_EVENT_CONN, -1) <= 0)
+				break;
+		}
+
+		tb_trace_i("[main] connected");
+
+		tb_byte_t data[16];
+		const char* str = "reload";
+		std::copy(str, str + sizeof(str), data);
+
+		tb_socket_send(sock, data, 16);
+
 		return 0;
 	}
 
-	const auto signal_handler = [](int signum) {
-		if (signum == SIGINT)
-		{
-			reload_requested.store(true);
-			cv.notify_all();
-		}
-	};
-	std::signal(SIGINT, signal_handler);
-
 	// Load config
 	Config config = Config::load();
-	if(config.autostart) {
+	if (config.autostart)
+	{
 		enable_autostart();
 	}
 
 	std::mutex mutex;
 	std::atomic<bool> stop_thread;
 	std::thread poll([&mutex, &config, &stop_thread] {
+		tb_socket_ref_t sock = tb_socket_init(TB_SOCKET_TYPE_TCP, TB_IPADDR_FAMILY_IPV4);
+		tb_assert_and_check_return(sock);
+
+		tb_ipaddr_t addr;
+		tb_ipaddr_set(&addr, "127.0.0.1", 8484, TB_IPADDR_FAMILY_IPV4);
+
+		tb_trace_i("[server] bind");
+		tb_check_return(tb_socket_bind(sock, &addr));
+
+		tb_trace_i("[server] listening on port 8484");
+		tb_check_return(tb_socket_listen(sock, 10));
+
 		while (!stop_thread.load())
 		{
-			std::unique_lock<std::mutex> lock(mutex);
-			cv.wait(lock, [] { return reload_requested.load(); });
+			bool reload = false;
+			tb_socket_ref_t client = tb_null;
+			while (1)
+			{
+				// accept and start client connection
+				if ((client = tb_socket_accept(sock, tb_null)))
+				{
+					tb_trace_i("[server] accept incoming client");
 
-			tb_trace_i("[new gitignore] user requested a new scan");
-			update_stignore(config);
-			// TODO add the new file to the file watcher
-			lock.unlock();
-			using namespace std::chrono_literals;
-			std::this_thread::sleep_for(100ms);
-			reload_requested.store(false); // Reset the flag
+					tb_socket_wait(client, TB_SOCKET_EVENT_RECV, -1);
+					tb_byte_t data[16];
+
+					tb_trace_i("[server] recieve data from client");
+					tb_socket_recv(client, data, 16);
+					tb_trace_d("[server] data: %s", data);
+
+					std::string str(data, data + sizeof(data) / sizeof(data[0]));
+					if (str == "reload")
+					{
+						reload = true;
+					}
+
+					tb_socket_exit(client);
+				}
+				else if (tb_socket_wait(sock, TB_SOCKET_EVENT_ACPT, -1) <= 0)
+				{
+					break;
+				}
+			}
+
+			if (reload)
+			{
+				std::unique_lock<std::mutex> lock(mutex);
+
+				tb_trace_i("[new gitignore] user requested a new scan");
+				update_stignore(config);
+				// TODO add the new file to the file watcher
+				lock.unlock();
+				using namespace std::chrono_literals;
+				std::this_thread::sleep_for(100ms);
+				reload = false;
+			}
 		}
 	});
 
@@ -334,7 +388,6 @@ tb_int_t main(tb_int_t argc, tb_char_t** argv)
 		update_stignore(config);
 	}
 
-
 	if (argc > 1)
 	{
 		std::string arg1 = std::string(argv[1]);
@@ -343,7 +396,7 @@ tb_int_t main(tb_int_t argc, tb_char_t** argv)
 			tb_trace_i("[nowatch] quit without watching");
 			return 0;
 		}
-	} 
+	}
 
 	// As a cosmocc program is compiled on linux, the file watcher relies on inotify function
 	// but those are not avaivable on other platform than linux with cosmocc
