@@ -70,7 +70,7 @@ struct Config
 		return config;
 	}
 
-	void save()
+	void save() const
 	{
 		const fs::path config_path =
 			normalize_path(fs::path(get_program_file()).parent_path()) / "synctignore.json";
@@ -115,7 +115,6 @@ std::map<fs::path, fs::file_time_type> collect_gitignore_files(const fs::path& p
 	{
 		if (entry.path().filename() == ".gitignore")
 		{
-			std::cout << entry.path() << std::endl;
 			const auto mtime = entry.last_write_time();
 			gitignore_files.emplace(entry.path().lexically_normal(), mtime);
 		}
@@ -193,7 +192,7 @@ std::set<std::string> convert_ignore_rules(
 
 void save_stignore(const Config& config)
 {
-	tb_trace_i("[save stignore]");
+	tb_trace_i("[stignore] saving");
 	std::ofstream ofs(".stignore", std::ios::out);
 	for (const auto& rule : config.synctignore_rules)
 	{
@@ -206,11 +205,12 @@ void save_stignore(const Config& config)
 	{
 		ofs << rule << "\n";
 	}
+	config.save();
 }
 
 void load_stignore(Config& config)
 {
-	tb_trace_i("[load stignore]");
+	tb_trace_i("[stignore] loading");
 	std::ifstream ifs(".stignore");
 	int line_num = 0;
 	std::string line;
@@ -264,7 +264,6 @@ void update_stignore(Config& config)
 	config.synctignore_rules.merge(convert_ignore_rules(updated_gitignore));
 	config.gitignore_files.merge(updated_gitignore);
 
-	config.save();
 	save_stignore(config);
 }
 
@@ -276,7 +275,7 @@ tb_int_t main(tb_int_t argc, tb_char_t** argv)
 
 	if (is_running())
 	{
-		tb_trace_i("[main] Already running");
+		tb_trace_i("[client] Already running");
 		// Raise a signal for the already running instance
 		tb_socket_ref_t sock = tb_socket_init(TB_SOCKET_TYPE_TCP, TB_IPADDR_FAMILY_IPV4);
 
@@ -291,12 +290,13 @@ tb_int_t main(tb_int_t argc, tb_char_t** argv)
 				break;
 		}
 
-		tb_trace_i("[main] connected");
+		tb_trace_i("[client] connected");
 
 		tb_byte_t data[16];
 		const char* str = "reload";
 		std::copy(str, str + sizeof(str), data);
 
+		tb_trace_i("[client] send");
 		tb_socket_send(sock, data, 16);
 
 		return 0;
@@ -309,9 +309,14 @@ tb_int_t main(tb_int_t argc, tb_char_t** argv)
 		enable_autostart();
 	}
 
+	std::set<fs::path> watched_dirs;
+
+	// Setup file watcher
+	tb_fwatcher_ref_t fwatcher = tb_fwatcher_init();
+
 	std::mutex mutex;
 	std::atomic<bool> stop_thread;
-	std::thread poll([&mutex, &config, &stop_thread] {
+	std::thread poll([&mutex, &config, &stop_thread, &watched_dirs, fwatcher] {
 		tb_socket_ref_t sock = tb_socket_init(TB_SOCKET_TYPE_TCP, TB_IPADDR_FAMILY_IPV4);
 		tb_assert_and_check_return(sock);
 
@@ -342,10 +347,10 @@ tb_int_t main(tb_int_t argc, tb_char_t** argv)
 					tb_socket_recv(client, data, 16);
 					tb_trace_d("[server] data: %s", data);
 
-					std::string str(data, data + sizeof(data) / sizeof(data[0]));
-					if (str == "reload")
+					if (!tb_strcmp(reinterpret_cast<tb_char_t*>(data), "reload"))
 					{
 						reload = true;
+						break;
 					}
 
 					tb_socket_exit(client);
@@ -360,9 +365,21 @@ tb_int_t main(tb_int_t argc, tb_char_t** argv)
 			{
 				std::unique_lock<std::mutex> lock(mutex);
 
-				tb_trace_i("[new gitignore] user requested a new scan");
+				tb_trace_i("[reload] user requested a new scan");
 				update_stignore(config);
-				// TODO add the new file to the file watcher
+
+				for (const auto& file : config.gitignore_files)
+				{
+					const auto directory = file.first.parent_path();
+					if (!watched_dirs.contains(directory))
+					{
+						tb_fwatcher_add(fwatcher, directory.generic_string().c_str(), tb_false);
+						watched_dirs.insert(directory);
+					}
+				}
+
+				tb_fwatcher_spak(fwatcher);
+
 				lock.unlock();
 				using namespace std::chrono_literals;
 				std::this_thread::sleep_for(100ms);
@@ -380,7 +397,6 @@ tb_int_t main(tb_int_t argc, tb_char_t** argv)
 		config.synctignore_rules = convert_ignore_rules(gitignore_files);
 		config.gitignore_files = gitignore_files;
 		save_stignore(config);
-		config.save();
 	}
 	else
 	{
@@ -406,10 +422,6 @@ tb_int_t main(tb_int_t argc, tb_char_t** argv)
 	return 0;
 #endif
 
-	std::set<fs::path> watched_dirs;
-
-	// Setup file watcher
-	tb_fwatcher_ref_t fwatcher = tb_fwatcher_init();
 	for (const auto& file : config.gitignore_files)
 	{
 		const auto directory = file.first.parent_path();
@@ -429,7 +441,7 @@ tb_int_t main(tb_int_t argc, tb_char_t** argv)
 		if ((event.event & TB_FWATCHER_EVENT_MODIFY) && (file.filename() == ".gitignore"))
 		{
 
-			tb_trace_i("[watcher] gitignore modified at : %s", file.c_str());
+			tb_trace_i("[watcher] gitignore modified at : %s", file.generic_string().c_str());
 			std::lock_guard<std::mutex> lock(mutex);
 			// gitgnore have changed, update the rules
 			auto entry = config.gitignore_files.extract(file);
@@ -441,7 +453,6 @@ tb_int_t main(tb_int_t argc, tb_char_t** argv)
 			config.gitignore_files.merge(m);
 
 			save_stignore(config);
-			config.save();
 		}
 	}
 
