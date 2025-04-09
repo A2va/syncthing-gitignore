@@ -145,9 +145,11 @@ std::set<std::string> convert_ignore_rules(
 		if (matches(file_path))
 			continue;
 
-		matchers.emplace_back(file_path, normalize_path(fs::current_path()));
+		const auto executable_directory = normalize_path(fs::path(get_program_file()).parent_path());
+		matchers.emplace_back(file_path, executable_directory);
 
-		fs::path gitignore_parent_path = fs::relative(file_path.parent_path()).lexically_normal();
+		fs::path gitignore_parent_path =
+			fs::relative(file_path.parent_path(), executable_directory).lexically_normal();
 		// If the relative path is just ".", make it an empty path
 		if (gitignore_parent_path == ".")
 			gitignore_parent_path = "";
@@ -192,8 +194,10 @@ std::set<std::string> convert_ignore_rules(
 
 void save_stignore(const Config& config)
 {
+	const auto executable_directory = normalize_path(fs::path(get_program_file()).parent_path());
+
 	tb_trace_i("[stignore] saving");
-	std::ofstream ofs(".stignore", std::ios::out);
+	std::ofstream ofs(executable_directory / ".stignore", std::ios::out);
 	for (const auto& rule : config.synctignore_rules)
 	{
 		ofs << rule << "\n";
@@ -387,12 +391,10 @@ tb_int_t main(tb_int_t argc, tb_char_t** argv)
 			}
 		}
 	});
-
+	const auto executable_directory = normalize_path(fs::path(get_program_file()).parent_path());
 	// First stignore creation if it doesn't exist
-	if (!fs::exists(".stignore"))
+	if (!fs::exists(executable_directory / ".stignore"))
 	{
-		const auto executable_directory =
-			normalize_path(fs::path(get_program_file()).parent_path());
 		const auto gitignore_files = collect_gitignore_files(executable_directory);
 		config.synctignore_rules = convert_ignore_rules(gitignore_files);
 		config.gitignore_files = gitignore_files;
