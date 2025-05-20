@@ -145,7 +145,8 @@ std::set<std::string> convert_ignore_rules(
 		if (matches(file_path))
 			continue;
 
-		const auto executable_directory = normalize_path(fs::path(get_program_file()).parent_path());
+		const auto executable_directory =
+			normalize_path(fs::path(get_program_file()).parent_path());
 		matchers.emplace_back(file_path, executable_directory);
 
 		fs::path gitignore_parent_path =
@@ -204,7 +205,8 @@ void save_stignore(const Config& config)
 		ofs << rule << "\n";
 	}
 
-	ofs << "// USER RULES" << "\n";
+	ofs << "// USER RULES"
+		<< "\n";
 
 	for (const auto& rule : config.user_rules)
 	{
@@ -316,11 +318,37 @@ tb_int_t main(tb_int_t argc, tb_char_t** argv)
 
 	std::set<fs::path> watched_dirs;
 
+	const auto executable_directory = normalize_path(fs::path(get_program_file()).parent_path());
+	// First stignore creation if it doesn't exist
+	if (!fs::exists(executable_directory / ".stignore"))
+	{
+		const auto gitignore_files = collect_gitignore_files(executable_directory);
+		config.synctignore_rules = convert_ignore_rules(gitignore_files);
+		config.gitignore_files = gitignore_files;
+		save_stignore(config);
+	}
+	else
+	{
+		load_stignore(config);
+		update_stignore(config);
+	}
+
+	if (argc > 1)
+	{
+		std::string arg1 = std::string(argv[1]);
+		if (arg1 == "nowatch" || arg1 == "nw")
+		{
+			tb_trace_i("[nowatch] quit without watching");
+			return 0;
+		}
+	}
+
 	// Setup file watcher
 	tb_fwatcher_ref_t fwatcher = tb_fwatcher_init();
 
 	std::mutex mutex;
 	std::atomic<bool> stop_thread;
+
 	std::thread poll([&mutex, &config, &stop_thread, &watched_dirs, fwatcher] {
 		tb_socket_ref_t sock = tb_socket_init(TB_SOCKET_TYPE_TCP, TB_IPADDR_FAMILY_IPV4);
 		tb_assert_and_check_return(sock);
@@ -392,33 +420,9 @@ tb_int_t main(tb_int_t argc, tb_char_t** argv)
 			}
 		}
 	});
-	const auto executable_directory = normalize_path(fs::path(get_program_file()).parent_path());
-	// First stignore creation if it doesn't exist
-	if (!fs::exists(executable_directory / ".stignore"))
-	{
-		const auto gitignore_files = collect_gitignore_files(executable_directory);
-		config.synctignore_rules = convert_ignore_rules(gitignore_files);
-		config.gitignore_files = gitignore_files;
-		save_stignore(config);
-	}
-	else
-	{
-		load_stignore(config);
-		update_stignore(config);
-	}
-
-	if (argc > 1)
-	{
-		std::string arg1 = std::string(argv[1]);
-		if (arg1 == "nowatch" || arg1 == "nw")
-		{
-			tb_trace_i("[nowatch] quit without watching");
-			return 0;
-		}
-	}
 
 	// As a cosmocc program is compiled on linux, the file watcher relies on inotify function
-	// but those are not avaivable on other platform than linux with cosmocc
+	// but those are not available on other platform than linux with cosmocc
 	// So disable the file watching altogether.
 	// https://github.com/jart/cosmopolitan/blob/5eb7cd664393d8a3420cbfe042cfc3d7c7b2670d/libc/sysv/syscalls.sh#L270
 #ifdef __COSMOPOLITAN__
