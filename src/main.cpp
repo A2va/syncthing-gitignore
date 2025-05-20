@@ -180,7 +180,8 @@ std::set<std::string> convert_ignore_rules(
 
 			if ((line.find('/') != std::string::npos) && (line.back() != '/'))
 			{
-				ignore_rules.insert(negation + gitignore_parent_path.generic_string() + line);
+				std::string sep = line.starts_with("/") ? "" : "/";
+				ignore_rules.insert(negation + gitignore_parent_path.generic_string() + sep + line);
 				continue;
 			}
 
