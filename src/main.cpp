@@ -1,5 +1,6 @@
 #include <condition_variable>
 #include <algorithm>
+#include <optional>
 #include <atomic>
 #include <chrono>
 #include <csignal>
@@ -45,14 +46,24 @@ namespace nlohmann
 	};
 } // namespace nlohmann
 
+struct GitIgnoreFile
+{
+	NLOHMANN_DEFINE_TYPE_INTRUSIVE(GitIgnoreFile, mtime, st_rules);
+	fs::file_time_type mtime;
+	std::set<std::string> st_rules;
+};
+
 struct Config
 {
-	std::set<std::string> synctignore_rules;
+	//std::set<std::string> synctignore_rules;
 	std::set<std::string> user_rules;
-	std::map<fs::path, fs::file_time_type> gitignore_files;
+	std::map<fs::path, GitIgnoreFile> gitignore_files;
 	bool autostart;
-	NLOHMANN_DEFINE_TYPE_INTRUSIVE(Config, synctignore_rules, user_rules, gitignore_files,
+	NLOHMANN_DEFINE_TYPE_INTRUSIVE(Config, user_rules, gitignore_files,
 								   autostart);
+
+	size_t gitignore_size;
+	std::vector<GitIgnoreMatcher> matchers_vector;
 
 	static Config load()
 	{
@@ -78,6 +89,37 @@ struct Config
 		std::ofstream ofs(config_path);
 
 		ofs << data.dump(4);
+	}
+
+	std::set<std::string> st_rules() const
+	{
+		std::set<std::string> rules;
+		for (const auto& file : gitignore_files)
+		{
+			rules.insert(file.second.st_rules.cbegin(), file.second.st_rules.cend());
+		}
+		return rules;
+	}
+
+	/// Returns all the matcher 
+	std::vector<GitIgnoreMatcher> matchers(std::optional<fs::path> gitignore)
+	{
+		if (gitignore_files.size() == gitignore_size)
+		{
+			return matchers_vector;
+		}
+
+		matchers_vector = {};
+		const auto executable_directory =
+			normalize_path(fs::path(get_program_file()).parent_path());
+		for (const auto [key, value] : gitignore_files)
+		{
+			if (gitignore.has_value() && (gitignore.value().compare(key))) {
+				matchers_vector.emplace_back(gitignore.value(), executable_directory);
+			}
+		}
+		gitignore_size = gitignore_files.size();
+		return matchers_vector;
 	}
 };
 
@@ -107,91 +149,92 @@ void strip(std::string& str)
 	str = start_pos <= end_pos ? std::string(start_it, end_it.base()) : "";
 }
 
-std::map<fs::path, fs::file_time_type> collect_gitignore_files(const fs::path& path)
+std::map<fs::path, GitIgnoreFile> collect_gitignore_files(const fs::path& path)
 {
-	std::map<fs::path, fs::file_time_type> gitignore_files;
+	std::map<fs::path, GitIgnoreFile> gitignore_files;
 	fs::recursive_directory_iterator dir_iter(normalize_path(path));
 	for (const auto& entry : dir_iter)
 	{
 		if (entry.path().filename() == ".gitignore")
 		{
 			const auto mtime = entry.last_write_time();
-			gitignore_files.emplace(entry.path().lexically_normal(), mtime);
+			gitignore_files.emplace(entry.path().lexically_normal(),
+									GitIgnoreFile{.mtime = mtime, .st_rules = {}});
 		}
 	}
 	return gitignore_files;
 }
 
-// Convert ignore rules from git to syncthing
-std::set<std::string> convert_ignore_rules(
-	const std::map<fs::path, fs::file_time_type>& gitignore_files)
+// Check if the path is ignored by a collection of GitIgnoreMatcher
+bool is_path_ignored_by_any(const fs::path& path, const std::vector<GitIgnoreMatcher>& matchers)
 {
-	std::vector<GitIgnoreMatcher> matchers;
-	const auto matches = [&matchers](const fs::path& path) {
-		for (const auto& matcher : matchers)
-		{
-			if (matcher.is_ignored(path))
-			{
-				return true;
-			}
-		}
-		return false;
-	};
-
-	std::set<std::string> ignore_rules;
-	for (const auto& file : gitignore_files)
+	for (const auto& matcher : matchers)
 	{
-		const auto file_path = file.first;
-		if (matches(file_path))
-			continue;
-
-		const auto executable_directory =
-			normalize_path(fs::path(get_program_file()).parent_path());
-		matchers.emplace_back(file_path, executable_directory);
-
-		fs::path gitignore_parent_path =
-			fs::relative(file_path.parent_path(), executable_directory).lexically_normal();
-		// If the relative path is just ".", make it an empty path
-		if (gitignore_parent_path == ".")
-			gitignore_parent_path = "";
-
-		std::ifstream ifs(file_path);
-		int line_num = 0;
-		std::string line;
-
-		while (std::getline(ifs, line))
+		if (matcher.is_ignored(path))
 		{
-			line_num++;
-			strip(line);
-			if (line == "" || line.starts_with("#"))
-				continue;
-
-			std::string negation = "";
-			if (line.starts_with("!"))
-			{
-				negation = "!";
-				line = line.substr(1);
-			}
-
-			if (line.starts_with("/"))
-			{
-				ignore_rules.insert(negation + gitignore_parent_path.generic_string() + line);
-				continue;
-			}
-
-			if ((line.find('/') != std::string::npos) && (line.back() != '/'))
-			{
-				std::string sep = line.starts_with("/") ? "" : "/";
-				ignore_rules.insert(negation + gitignore_parent_path.generic_string() + sep + line);
-				continue;
-			}
-
-			ignore_rules.insert(negation + gitignore_parent_path.generic_string() + '/' + line);
-			ignore_rules.insert(negation + gitignore_parent_path.generic_string() + '/' + "**" +
-								'/' + line);
+			return true;
 		}
 	}
-	return ignore_rules;
+	return false;
+}
+
+// Convert ignore rules from git to syncthing
+void convert_ignore_rules(const fs::path& file_path, GitIgnoreFile& gitignorefile,
+						  const std::vector<GitIgnoreMatcher>& matchers)
+{
+	const auto executable_directory = normalize_path(fs::path(get_program_file()).parent_path());
+	fs::path gitignore_parent_path =
+		fs::relative(file_path.parent_path(), executable_directory).lexically_normal();
+	// If the relative path is just ".", make it an empty path
+	if (gitignore_parent_path == ".")
+		gitignore_parent_path = "";
+
+	std::ifstream ifs(file_path);
+	int line_num = 0;
+	std::string line;
+
+	while (std::getline(ifs, line))
+	{
+		line_num++;
+		strip(line);
+		if (line == "" || line.starts_with("#"))
+			continue;
+
+		auto& ignore_rules = gitignorefile.st_rules;
+
+		std::string negation = "";
+		if (line.starts_with("!"))
+		{
+			negation = "!";
+			line = line.substr(1);
+		}
+
+		if (line.starts_with("/"))
+		{
+			ignore_rules.insert(negation + gitignore_parent_path.generic_string() + line);
+			continue;
+		}
+
+		if ((line.find('/') != std::string::npos) && (line.back() != '/'))
+		{
+			std::string sep = line.starts_with("/") ? "" : "/";
+			ignore_rules.insert(negation + gitignore_parent_path.generic_string() + sep + line);
+			continue;
+		}
+
+		ignore_rules.insert(negation + gitignore_parent_path.generic_string() + '/' + line);
+		ignore_rules.insert(negation + gitignore_parent_path.generic_string() + '/' + "**" + '/' +
+							line);
+	}
+}
+
+void convert_ignore_rules(std::map<fs::path, GitIgnoreFile>& gitignore_files,
+						  const std::vector<GitIgnoreMatcher>& matchers)
+{
+	for (auto& [file_path, gitignore_file] : gitignore_files)
+	{
+		convert_ignore_rules(file_path, gitignore_file, matchers);
+	}
 }
 
 void save_stignore(const Config& config)
@@ -200,7 +243,9 @@ void save_stignore(const Config& config)
 
 	tb_trace_i("[stignore] saving");
 	std::ofstream ofs(executable_directory / ".stignore", std::ios::out);
-	for (const auto& rule : config.synctignore_rules)
+
+	const auto rules = config.st_rules();
+	for (const auto& rule : rules)
 	{
 		ofs << rule << "\n";
 	}
@@ -230,11 +275,12 @@ void load_stignore(Config& config)
 		rules.insert(line);
 	}
 
+	const auto synctignore_rules = config.st_rules();
 	// Consider any rule that is isn't in synctignore_rules as user rules
 	for (const auto& rule : rules)
 	{
 
-		if ((config.synctignore_rules.contains(rule) || rule.starts_with("//")) == false)
+		if ((synctignore_rules.contains(rule) || rule.starts_with("//")) == false)
 		{
 			config.user_rules.insert(rule);
 		}
@@ -247,7 +293,7 @@ void update_stignore(Config& config)
 
 	// Check if some gitignore files were modified, update stignore rules accordingly
 	const auto gitignore_files = collect_gitignore_files(executable_directory);
-	std::map<fs::path, fs::file_time_type> updated_gitignore;
+	std::map<fs::path, GitIgnoreFile> updated_gitignore;
 	for (const auto& file : gitignore_files)
 	{
 
@@ -260,15 +306,16 @@ void update_stignore(Config& config)
 		}
 
 		// File was modified
-		if (file.second > existing_file_entry->second)
+		if (file.second.mtime > existing_file_entry->second.mtime)
 		{
 			updated_gitignore.insert(file);
+			// TODO Try to find a better way than deleting the key to put it back in the merge later
 			config.gitignore_files.erase(existing_file_entry);
 		}
 	}
 
 	// Update the config with the updated files/ rules
-	config.synctignore_rules.merge(convert_ignore_rules(updated_gitignore));
+	convert_ignore_rules(updated_gitignore, config.matchers(std::nullopt));
 	config.gitignore_files.merge(updated_gitignore);
 
 	save_stignore(config);
@@ -322,9 +369,8 @@ tb_int_t main(tb_int_t argc, tb_char_t** argv)
 	// First stignore creation if it doesn't exist
 	if (!fs::exists(executable_directory / ".stignore"))
 	{
-		const auto gitignore_files = collect_gitignore_files(executable_directory);
-		config.synctignore_rules = convert_ignore_rules(gitignore_files);
-		config.gitignore_files = gitignore_files;
+		config.gitignore_files = collect_gitignore_files(executable_directory);
+		convert_ignore_rules(config.gitignore_files, config.matchers(std::nullopt));
 		save_stignore(config);
 	}
 	else
@@ -450,15 +496,12 @@ tb_int_t main(tb_int_t argc, tb_char_t** argv)
 
 			tb_trace_i("[watcher] gitignore modified at : %s", file.generic_string().c_str());
 			std::lock_guard<std::mutex> lock(mutex);
-			// gitgnore have changed, update the rules
-			auto entry = config.gitignore_files.extract(file);
-			entry.mapped() = fs::last_write_time(file);
 
-			std::map<fs::path, fs::file_time_type> m;
-			m.insert(std::move(entry));
-			config.synctignore_rules.merge(convert_ignore_rules(m));
-			config.gitignore_files.merge(m);
+			// gitignore have changed, update the rules
+			auto it = config.gitignore_files.find(file);
+			tb_assert(it != config.gitignore_files.end());
 
+			convert_ignore_rules(config.gitignore_files, config.matchers(std::make_optional(file)));
 			save_stignore(config);
 		}
 	}
