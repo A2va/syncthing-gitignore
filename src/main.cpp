@@ -294,6 +294,7 @@ void update_stignore(Config& config)
 	// Check if some gitignore files were modified, update stignore rules accordingly
 	const auto gitignore_files = collect_gitignore_files(executable_directory);
 	std::map<fs::path, GitIgnoreFile> updated_gitignore;
+
 	for (const auto& file : gitignore_files)
 	{
 
@@ -311,6 +312,19 @@ void update_stignore(Config& config)
 			updated_gitignore.insert(file);
 			// TODO Try to find a better way than deleting the key to put it back in the merge later
 			config.gitignore_files.erase(existing_file_entry);
+		}
+	}
+
+	// Remove deleted files
+	for (auto it = config.gitignore_files.begin(); it != config.gitignore_files.end();)
+	{
+		if (!gitignore_files.contains(it->first))
+		{
+			it = config.gitignore_files.erase(it); // erase returns next iterator
+		}
+		else
+		{
+			++it;
 		}
 	}
 
@@ -491,7 +505,8 @@ tb_int_t main(tb_int_t argc, tb_char_t** argv)
 			eof = tb_true;
 
 		const fs::path file = fs::path(event.filepath).lexically_normal();
-		if ((event.event & TB_FWATCHER_EVENT_MODIFY) && (file.filename() == ".gitignore"))
+		const bool is_gitignore = file.filename() == ".gitignore";
+		if ((event.event & TB_FWATCHER_EVENT_MODIFY) && is_gitignore)
 		{
 
 			tb_trace_i("[watcher] gitignore modified at : %s", file.generic_string().c_str());
@@ -502,6 +517,16 @@ tb_int_t main(tb_int_t argc, tb_char_t** argv)
 			tb_assert(it != config.gitignore_files.end());
 
 			convert_ignore_rules(config.gitignore_files, config.matchers(std::make_optional(file)));
+			save_stignore(config);
+		}
+		else if ((event.event & TB_FWATCHER_EVENT_DELETE) && is_gitignore)
+		{
+			std::lock_guard<std::mutex> lock(mutex);
+			// deleted file
+			const auto it = config.gitignore_files.find(file);
+			tb_assert(it != config.gitignore_files.end());
+			config.gitignore_files.erase(it);
+
 			save_stignore(config);
 		}
 	}
